@@ -1,0 +1,353 @@
+---
+title: "Prostate Cancer DREAM Challenge"
+author: 
+- name: "Niels Richard Hansen, Ann-Sophie Buchardt, Maria Bekker-Nielsen Dunbar, 
+Anne Helby Petersen, Lisbeth Tomaziu"
+  affiliation: "University of Copenhagen"
+date: "July 27, 2015"
+output: html_document
+---
+
+# Introduction
+
+For the prediction of risk scores for the Prostate Cancer DREAM Challenge we 
+used Cox's proportional hazards model in combination with variable selection and/or 
+penalization. The data analysis and model building was carried out in R. This 
+document includes a brief description of our work, and the computations required
+for fitting the final model are embedded as R code in the Results section. 
+
+It quickly became clear from the initial data analysis that two of the main challenges
+were how to deal with the variable selection and how to handle missing values. 
+The logitudinal data provided in addition to the core table was also explored, but 
+it was not obvious how to use the information in these tables besides some investigations
+of data quality and consistency. 
+
+The model we ended up with was a fairly standard model that did not differ much 
+from the model presented by Halabi et al. except that it was  a generalized additive
+model (a gam) that allows for nonlinear relations between continuous 
+predictors and the log-hazard. This model used only nine predictor variables. 
+
+We experimented with one way of extracting additional predictive information 
+from the many variables not included in the gam. This is described further 
+in the two sections Methods and Results below, but whether it produced any actual 
+increase of performance in terms of iAUC was uncertain.
+
+# Methods
+
+The following presentation of the methods refers only to the use of the 
+core table. We did not use the longitudinal data tables for the actual modeling.
+Moreover, this section does not describe any of the training-test data splits we 
+did on the training data to test out how well our methods could be expected to 
+work. The section only documents how the final models were fitted to the full 
+data set and how the predictions were computed on the validation data. 
+
+## Initial data cleaning
+
+The variables HGTBLCAT, WGTBLCAT, HEAD_AND_NECK, PANCREAS, THYROID, CREACLCA, CREACL,
+GLEAS_DX and STOMACH were removed from the core table as these variables have no or 
+limited variation in the training data.
+
+For the training data a single PSA value (Patient ID VEN-756003601) was changed 
+from 0 to 0.01, and a single ECOG value (Patient ID CELG-00121) was changed from 
+3 to 2. 
+
+For both the training and the validation data sets the ECOG variable was 
+converted to a factor. 
+
+## Missing values and imputation
+
+Some of the variables, lab values in particular, have many missing values. We 
+investigated several imputation methods, but our conclusion was that the more 
+complicated imputation methods resulted in worse predictive performance. Thus 
+we ended up with a very simple imputation method, which in principle relies on 
+a missing completely at random assumption. 
+
+For each variable we imputed missing values by sampling with replacement from 
+the observed values of that variable in the training data.    
+
+## Variable selection
+
+We used lasso penalization with Cox's partial log-likelihood as implemented in 
+the R package *glmnet* in combination with a form of stability selection for the 
+variable selection. 
+
+This was carried out by fitting the lasso path to 100 subsamples of the training 
+data of half the size of the initial data set. For each subsample the optimal 
+choice of penalty parameter was selected by cross-validation (as implemented in 
+the `cv.glmnet` function in the *glmnet* package), and the variables corresponding 
+to the non-zero parameters were selected. The proportion of times each variable 
+was selected was then computed across the 100 subsamples. The variables most 
+frequently selected by the lasso procedure were then selected for further 
+modeling.
+
+## Generalized additive model
+
+Based on the selected variables by the lasso procedure and some additional 
+considerations about the final model, a generalized additive proportional hazards 
+model was fitted using the `gam` function in the *mgcv* package with the `cox.ph` 
+family. 
+
+The fitting of a gam uses a basis expansion of all continuous predictors in 
+combination with penalized likelihood estimation. The *mgcv* package supports 
+an automatic selection of penalty parameters, which was used. 
+
+## Improvements based on ridge regression
+
+To include potential predictive information in the variables not selected we
+fitted a model using a ridge regression penalty as implemented in the R package 
+*glmnet* including all predictors considered for the variable selection step. 
+The final risk prediction was obtained as a weighted linear combination of 
+the risk prediction from the gam and the ridge model. 
+
+## Prediction of time-to-event
+
+For the prediction of the actual survival time (time-to-event) we used median
+survival time as predicted from the proportional hazards model. We did not 
+attempt to optimize this prediction and used the simplest method we could come up
+with. It used the same variables as the gam discussed above but was fitted without basis 
+expansion and penalization. It was fitted in R using the `surv` function from the 
+*survival* package and the subsequent median survival time predictions were computed 
+using the `survfit` function. 
+
+# Results
+
+The predictions were obtained by running the code below. The raw code is found in 
+the file *Write-up.R*. 
+
+```{r init, message=FALSE}
+library(ggplot2)
+library(survival)
+library(glmnet)
+library(mgcv)
+```
+
+## Data cleaning 
+
+The data in the two core tables were read from the csv files. To run the code 
+it below the files must be in the working directory of the R session. 
+
+In one of the data cleaning stesp below, all values that were equal to 
+the empty string were converted to `"No"`.
+
+```{r clean}
+load("../Data/Prostate_all.RData")
+training <- CoreTable_training
+validation <- CoreTable_validation
+
+discard <-  c("HGTBLCAT", "WGTBLCAT", "HEAD_AND_NECK", 
+              "PANCREAS", "THYROID", "CREACLCA", "CREACL", 
+              "GLEAS_DX", "STOMACH")
+training <- subset(training, select = -which(colnames(training) %in% discard))
+validation <- subset(validation, select = -which(colnames(validation) %in% discard))
+
+training <- transform(training, 
+                      PSA = ifelse(PSA == 0, 0.01, PSA),
+                      ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
+validation <- transform(validation, 
+                        ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
+
+for (i in seq_len(ncol(training))) {
+  if (is.factor(training[, i])) {
+    tmp <- as.character(training[, i])
+    tmp[tmp == ""] <- "No"
+    training[, i] <- factor(tmp)
+  }
+}
+
+for (i in seq_len(ncol(validation))) {
+  if (is.factor(validation[, i])) {
+    tmp <- as.character(validation[, i])
+    tmp[tmp == ""] <- "No"
+    validation[, i] <- factor(tmp)
+    name <- colnames(validation)[i]
+    if (name %in% colnames(training) && 
+          !identical(levels(validation[, i]), levels(training[, name])))
+      validation[, i] <- factor(tmp, levels(training[, name]))
+  }
+}
+```
+
+## Imputation
+
+The implemented imputation scheme consisted of sampling from the marginal 
+empirical distributions from the training data for each variable. 
+
+```{r impute}
+set.seed(1234)
+for (i in seq(1, ncol(training))) {
+  x0 <- training[, i]
+  nas <- is.na(x0)
+  if (!all(nas)) {
+    if (any(nas)) 
+      training[nas, i] <- sample(x0[!nas], sum(nas), replace = TRUE)  
+    name <- names(training)[i]
+    if(name %in% names(validation)) {
+      nasLeader <- is.na(validation[, name])
+      if (any(nasLeader))
+        validation[nasLeader, name] <- sample(x0[!nas], sum(nasLeader), replace = TRUE)
+    }
+  }
+}
+```
+
+
+## Variable selection
+
+```{r select, fig.width=9, cache=TRUE}
+variables <-  c(23, 27:ncol(training))
+train <- training[, c(4, 5, variables)]
+XX0 <- XX <- model.matrix(~ . - 1, train[, -c(1, 2)])
+YY <- Surv(train$LKADT_P, train$DEATH == "YES")
+
+n <- nrow(XX)
+p <- ncol(XX)
+B <- 100
+select <- matrix(0, p, B)
+rownames(select) <- colnames(XX)
+
+for (b in seq_len(B)) {
+  ii <- sample(n, n / 2 )
+  survNet <- cv.glmnet(XX[ii, ], YY[ii, ], family = "cox")
+  betahat <- coef(survNet, s = "lambda.min") 
+  select[, b] <- as.numeric(betahat != 0)
+}
+
+selectFreq <- rowSums(select) / B
+selectFreq <- sort(selectFreq, decreasing = TRUE)
+varSort <- factor(names(selectFreq), levels = names(selectFreq))  
+qplot(varSort[1:20], selectFreq[1:20]) + 
+  theme(axis.text.x = element_text(angle = -90)) + 
+  scale_y_continuous("Selection proportion") +
+  scale_x_discrete("Variable")
+```
+
+The variable selection procedure shows that the eight variables ALP, AST, HB, ECOG, 
+LIVER, ADRENAL, ALB and ANALGESICS are the most stably selected variables, all
+selected in more than 60% of the models. 
+
+In addition to these eight variables we included PSA and LYMPH_NODES, which were 
+suspected to be predictive based on the study by Halabi et al., and found to 
+be so in our studies as well. 
+
+## Gam 
+
+```{r gamfit}
+form <- LKADT_P ~ s(log(ALP)) + s(HB) + s(log(AST)) + s(log(PSA)) + s(ALB) +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES + ANALGESICS
+survGam <- gam(form, data = training, family = cox.ph(), weight = DEATH == "YES")
+summary(survGam)
+```
+
+The effect of ANALGESICS was not significant in this model, and it was removed 
+from the model.
+
+```{r}
+survGam <- update(survGam, . ~ . - ANALGESICS)
+```
+
+## Risk predictions
+
+As mentioned in Methods, the final risk predictions were given as a linear combination 
+of the risk predictions from the gam and the risk predictions from the ridge 
+regression model. The ridge model was fitted using the `cv.glmnet` function 
+with `alpha = 0`. The penalty parameter was selected by cross-validation choosing 
+the model with the minimal cross-validated negative partial log-likelihood. 
+
+```{r predict, dependson='select', fig.width=9, message=FALSE}
+survNet <- cv.glmnet(XX, YY, family = "cox", alpha = 0)
+XXvalidation <- model.matrix(~ . - 1, validation[, variables])
+ 
+riskhatGam <- predict(survGam, newdata = validation)
+riskhatNet <- predict(survNet, newx = XXvalidation, s = "lambda.min")[, 1]
+qplot(riskhatGam, riskhatNet) + geom_smooth()
+````
+
+The figure shows the scatter plot of the risk predictions on the validation data
+from the gam and the ridge regression model. The two predictions are clearly 
+strongly positively correlated.
+
+It should be mentioned that the predictions from the ridge models were generally 
+worse than the predictions from the gam (results not shown), and they were given a
+weight of 0.25 in the final risk prediction (the gam predictions were given weight 1). 
+It should be noted that the choice of the weight has not been optimized in a
+systematic way. 
+
+The following table shows the predictions made from the model, and it is identical to 
+the risk predictions found in the file *nrhFinal.csv*. 
+
+````{r finalPredict}
+riskhat <- riskhatGam + riskhatNet / 4
+riskhatValidation <- 
+  cbind(validation[, "RPT", drop = FALSE], data.frame(riskScoreGlobal = riskhat))
+riskhatValidation
+```
+
+```{r write, echo=FALSE, results='hide'}
+write.csv(riskhatValidation, file = "nrhFinal.csv", row.names=FALSE)
+```
+
+## Prediction of time-to-event
+
+```{r regression, fig.width=9}
+form <- Surv(LKADT_P,DEATH=="YES") ~ log(ALP) + HB + log(AST) + log(PSA) + ALB +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES 
+survReg <- coxph(form, data= training)
+riskhatReg <- predict(survReg, newdata = validation)
+qplot(riskhatGam, riskhatReg) + geom_smooth()
+```
+
+The figure shows the scatter plot of the risk predictions on the validation data
+from the gam and the regression model. 
+
+```{r timetoevent, fig.width=9, warning=FALSE}
+timehat <- summary(survfit(survReg, newdata = validation))$table[, "median"]
+qplot(riskhatReg, timehat)
+```
+
+The following table shows the predictions of survival times made from the model, 
+and it is identical to the time-to-event predictions found in the file 
+*nrhFinaltimetoevent.csv*. 
+
+```{r timehatVal}
+timehatValidation <- 
+  cbind(validation[, "RPT", drop = FALSE], data.frame(TIMETOEVENT = timehat))
+timehatValidation
+```
+
+
+```{r writetime, echo=FALSE, results='hide'}
+write.csv(timehatValidation, file = "nrhFinaltimetoevent.csv", row.names=FALSE)
+```
+
+# Discussion
+
+Based on our own validation studies and earlier submissions to the leaderboard,
+we expect a performance in terms of iAUC between 0.75 and 0.80. The addition of
+the ridge model to the gam is expected to give at most and increase of iAUC by 
+0.02. It could be interesting to investigate if boosting/bagging techniques 
+could improve on the ridge component. 
+
+We did not try to include interactions between variables selected for the gam 
+in any systematic way. 
+
+It was a little surprising that none of our attempts to come up with a
+clever handling of missing values had any positive impact on predictive 
+performance. On the contrary. 
+
+There is one issue with the variable selection that is worth investigating 
+further. The `glmnet` function standardizes all variables by default, which is 
+sensible if they are all continuous, but less so if some are dummy variables
+encoding factor levels. We did some experiments with standardizing only the 
+continuous predictors, but that did not appear to improve predictive performance
+in terms of iAUC. 
+
+# Author contributions
+
+NRH initiated the participation in the challenge. ASB, AHP and JZ worked 
+specifically on this subchallenge. LT and MBND worked specifically on the 
+other subchallenge. All authors worked on the exploratory data analysis,
+including the longitudinal data, and on the question about imputation. This 
+manuscript was written by NRH based on reports worked out by each of the
+other five authors. 
+
+
