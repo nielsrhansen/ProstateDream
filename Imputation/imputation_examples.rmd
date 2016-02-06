@@ -1,0 +1,111 @@
+---
+title: "Imputation function - examples"
+author: "Anne Petersen"
+output: html_document
+---
+
+This document contains tests of the imputation function and suggested construction of `classFrame` object.
+
+###Initial stuff:
+```{r, message=F, warning=FALSE}
+setwd("C:/Users/Anne/Desktop/ProstateProject/ProstateDream/")
+source("./Imputation/imputation.R")
+library(survival)
+library(mice)
+load("./Data/Prostate_all.RData")
+training <- CoreTable_training
+
+discard <-  c("HGTBLCAT", "WGTBLCAT", "HEAD_AND_NECK", 
+              "PANCREAS", "THYROID", "CREACLCA", "CREACL", 
+              "GLEAS_DX", "STOMACH")
+training <- subset(training, select = -which(colnames(training) %in% discard))
+
+training <- transform(training, 
+                      PSA = ifelse(PSA == 0, 0.01, PSA),
+                      ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
+
+for (i in seq_len(ncol(training))) {
+  if (is.factor(training[, i])) {
+    tmp <- as.character(training[, i])
+    tmp[tmp == ""] <- "No"
+    training[, i] <- factor(tmp)
+  }
+}
+```
+
+###Construction of classFrame
+This is a dataframe with one row for each possible predictor variable
+and two classifications, the appropriate modeltype and transformation.
+Modeltype is `binary` (factor variable with binary outcomes), `linear`
+(continuous variable) or `factor` (factor variable with more than two levels). Transform is either `log` or `id`.
+```{r}
+logPreds <- c("CREAT", "LDH", "NEU", "PSA", "WBC", "CREACL", 
+              "MG", "BUN", "CCRC")
+catPreds <- c("RACE_C", "REGION_C", "ECOG_C", "STUDYID",
+              "AGEGRP2", "SMOKE", "SMOKFREQ", "AGEGRP")
+binPreds <- names(training)[50:122]
+
+classFrame <- data.frame(names=names(training), 
+                         modeltype=factor(rep("linear",
+                                              ncol(training)),
+                                          levels=c("linear",
+                                                   "factor",
+                                                   "binary")),
+                         transform=factor(rep("id", ncol(training)),
+                                          levels=c("id", "log")))
+
+for (i in 1:length(logPreds)) {
+  classFrame[classFrame$names==logPreds[i], "transform"] <- "log"
+}
+for (i in 1:length(catPreds)) {
+  classFrame[classFrame$names==catPreds[i], "modeltype"] <- "factor"
+}
+for (i in 1:length(binPreds)) {
+  classFrame[classFrame$names==binPreds[i], "modeltype"] <- "binary"
+}
+```
+
+###Perform imputations
+You can skip only selecting missing variables to impute, but the code will run faster if you do and it makes it easier to tell which variables were actually imputed. You will need to specify which variables to not use for model fitting (the `nonPreds` variables) for the MAR imputation methods.
+```{r}
+nonPreds <- c("DOMAIN", "RPT", "LKADT_P", "DEATH", "DISCONT",
+              "ENDTRS_C", "ENTRT_PC", "PER_REF", "LKADT_REF",
+              "LKADT_PER")
+allVars <- names(training)
+impute <- rep(NA, ncol(training)) 
+for (i in 1:ncol(training)) {
+  impute[i] <- any(is.na(training[,i]))
+}
+impute <- allVars[impute]
+impute <- impute[!(impute %in% nonPreds)]
+```
+
+####MCAR imputation
+I just show how the function is called:
+```{r, eval=FALSE}
+imp(training, impute, impType="MCAR")
+```
+
+####MAR imputation, with response
+I suggest only using a limited number of possible predictors and setting a cut-off point for marginal effects (in terms of p-value) when selecting which predictors to use. Below, I have used a maximum of 5 predictors and cut-off at $p=0.05$. 
+
+
+Note that the order in which the imputation scheme is conducted has no influence on the results because the orignial dataset is used for fitting the imputation models (not the dataset in which the imputed variables are stored). Note also that we only allow for variables with no missing values to be used in the imputation models. This could of course be changed.
+```{r, eval=FALSE}
+cF <- classFrame[classFrame$names %in% impute, ]
+imp(training, impute, cF,
+  alpha=0.05, min.obs.num=nrow(training), num.preds=5,
+  survobject=Surv(training$LKADT_P, training$DEATH=="YES"),
+  key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
+```
+
+####MAR, no response
+I simply show how the function is called:
+```{r, eval=FALSE}
+imp(training, impute, cF,
+  alpha=0.05, min.obs.num=nrow(training), num.preds=5,
+  key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+```
+
+
+None of the functions are very efficient. I though this would not be necessary. If I am wrong, please tell me, and I will speed them up.
