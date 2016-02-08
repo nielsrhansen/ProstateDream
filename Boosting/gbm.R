@@ -5,8 +5,8 @@
 # Automated variable selection is done
 # with a Cox model with LASSO penalty.
 
-# note that one should install 
-  # gbm,vbut not the CRAN version. Instead:
+# note that one should install the gbm package
+  # but not the CRAN version. Instead:
   # use the GBMCI-implementation of gbm 
   # installed from github with the following command
   # install_github("uci-cbcl/GBMCI")
