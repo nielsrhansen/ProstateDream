@@ -1,0 +1,53 @@
+---
+title: Random Survival Forests
+date: "6 February 2016"
+output: html_document
+
+references:
+- id: ishwaranRSF2008
+  title: Random survival forests
+  author:
+  - family: Ishwaran
+    given: Hemant
+  - family: Kogalur
+    given: Udaya B.
+  - family: Blackstone
+    given: Eugene H.
+  - family: Lauer
+    given: Michael S.
+  container-title: The Annals of Applied Statistics
+  volume: 2
+  DOI: 10.1214/08-AOAS169 
+  issue: 3
+  page: 841-860
+  type: article-journal
+  issued:
+    year: 2008
+    month: 9
+
+- id: ishwaranRSF2010
+  title: High-Dimensional Variable Selection for Survival Data
+  author:
+  - family: Ishwaran
+    given: Hemant
+  - family: Kogalur
+    given: Udaya B.
+  - family: Gorodeski
+    given: Eiran Z.
+  - family: Minn
+    given: Andy J.
+  - family: Lauer
+    given: Michael S.
+  container-title: Journal of the American Statistical Association
+  volume: 105
+  DOI:  10.1198/jasa.2009.tm08622
+  issue: 489
+  page: 205-217
+  type: article-journal
+  issued:
+    year: 2010
+---
+
+A random survival forest is an ensemble method that uses trees as base learners [@ishwaranRSF2008]. For each iteration of the algorithm, a data set of same size as the original is sampled with replacement from the original. A tree is then grown using this data set. For each node of this tree, a subset of variables are sampled and considered for splitting. The splitting is done according to one of these variables in order to maximize the survival difference. In each terminal node a Nelson-Aalen estimate is calculated. These estimates are then aggregated into an ensemble fit.
+
+We included every variable not removed during the initial data cleaning and used 1000 trees. We used a minimum node size of 6 (number of events). For each split the procedure considered 20 candidate variables and for each of those variables a maximum of 10 potential splitting points were randomly chosen and then considered splitting. Setting a maximum of potential splitting points has two purposes. First of all, it speeds up computations. Secondly, it counters the fact that the algorithm is biased towards splitting on continuous variables as opposed to variables with only a few levels [@ishwaranRSF2010].

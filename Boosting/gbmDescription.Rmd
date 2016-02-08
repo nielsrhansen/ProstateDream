@@ -1,0 +1,54 @@
+---
+title: Gradient Boosting Machines
+date: "6 February 2016"
+output: html_document
+
+references:
+- id: chenGBMCI2013
+  title: A Gradient Boosting Algorithm for Survival Analysis via Direct Optimization of Concordance Index
+  author:
+  - family: Chen
+    given: Yifei
+  - family: Jia
+    given: Zhenyu
+  - family: Mercola
+    given: Dan
+  - family: Xie
+    given: Xiaohui
+  container-title: Computational and Mathematical Methods in Medicine
+  volume: 2013
+  URL: 'http://dx.doi.org/10.1155/2013/873595'
+  DOI: 10.1155/2013/873595
+  issue: 
+  publisher: 
+  page: 
+  type: article-journal
+  issued:
+    year: 2013
+
+- id: friedman2002
+  title: Stochastic Gradient Boosting
+  author:
+  - family: Friedman
+    given: Jerome H.
+  container-title: Computational Statistics and Data Analysis
+  volume: 38
+  DOI: 10.1016/S0167-9473(01)00065-2 
+  issue: 4
+  publisher: 
+  page: 367-378
+  type: article-journal
+  issued:
+    year: 2002
+
+---
+
+
+
+We used an implementation of a gradient boosting machine that directly seeks to optimize a smoothed version of the concordance index (C-index) as implemented in [@chenGBMCI2013]. When fitting a gradient boosting machine, base learners (in this case trees) are fitted sequentially. Often shrinkage is applied to control how much a single base learner may influence the ensemble fit. This implementation implicitly applies shrinkage when fitting an individual tree as an optimal solution is not guaranteed [@chenGBMCI2013]. We found that explicitly applying shrinkage did not improve the predictions and therefore no shrinkage was applied explicitly.
+
+Before using gradient boosting, we fitted a Cox model with LASSO penalty to do variable selection. Cross-validation was used for tuning the penalty parameter. Variables with non-zero coefficients in this model fit were used for fitting the gradient boosting machine.
+
+For each iteration of the gradient boosting machine, a subset of observations was sampled uniformly from the original data without replacement. This is termed *stochastic* gradient boosting [@friedman2002]. A tree was then fit to this subset of data using only the variables chosen by the LASSO as described above. A smoothed version of the C-index was used as loss function when fitting the trees.
+
+The subsampling fraction (bag fraction) controls how many observations are used for each tree fit. We used a subsampling fraction of 0.5. We allowed interactions of up to three variables and used a minimum node size of 10. To avoid overfitting, we fixed the maximal number of trees at 1000 and used cross-validation to choose how many of these trees to include in the ensemble fit.
