@@ -1,0 +1,79 @@
+---
+title: "Main"
+author: "Ann-Sophie Buchardt"
+date: "02/09/2016"
+output: html_document
+---
+
+```{r Preamble}
+rm(list=ls())
+gc()
+
+library(survival)
+library(mice)
+library(glmnet)
+library(gbm)
+
+# Loading data
+CoreTable <- read.csv("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream/CoreTable_training.csv")
+
+# Data manipulation
+source("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream/data.R")
+
+# Sourcing imputation functions
+source("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream/impute.R")
+
+# Sourcing boosting function
+source("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream/boosting.R")
+```
+
+```{r TestTraing}
+set.seed(5)
+subC <- subset(CoreTable, select = which(!(names(CoreTable) %in% c("RPT", "STUDYID"))))
+train_idx <- sample(1:nrow(subC), floor(0.8 * nrow(subC)), replace = FALSE)
+trainTemp <- CoreTable[train_idx,] 
+testTemp <- CoreTable[-train_idx,] 
+```
+
+```{r ImputationSetup}
+nonPreds <- c("DOMAIN", "RPT", "LKADT_P", "DEATH", "DISCONT",
+              "ENDTRS_C", "ENTRT_PC", "PER_REF", "LKADT_REF",
+              "LKADT_PER")
+allVars <- names(CoreTable)
+impute <- rep(NA, ncol(CoreTable)) 
+for (i in 1:ncol(CoreTable)) {
+  impute[i] <- any(is.na(CoreTable[,i]))
+}
+impute <- allVars[impute]
+impute <- impute[!(impute %in% nonPreds)]
+```
+
+```{r x7imputations}
+cF <- classFrame[classFrame$names %in% impute, ]
+
+trainDataMCAR <- imp(trainTemp, impute, impType="MCAR")
+testDataMCAR <- imp(testTemp, impute, impType="MCAR")
+
+trainDataMAR <- imp(trainTemp, impute, cF,
+                    alpha=0.05, min.obs.num=nrow(training), num.preds=5,
+                    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+testDataMAR <- imp(testTemp, impute, cF,
+                    alpha=0.05, min.obs.num=nrow(training), num.preds=5,
+                    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+
+trainDataMARwR <- imp(trainTemp, impute, cF,
+                     alpha=0.05, min.obs.num=nrow(training), num.preds=5,
+                     survobject=Surv(training$LKADT_P, training$DEATH=="YES"),
+                     key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
+```
+
+```{r gradientBoosting}
+gradBoostMCAR <- gradBM(trainDataMCAR, testDataMCAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMAR <- gradBM(trainDataMAR, testDataMAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
+```
+
