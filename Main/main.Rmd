@@ -214,7 +214,7 @@ predsForm <- function(data=CoreTable,
 #NA occurence.
 MARimp <- function(data, modeltype="linear", 
                    survobject=Surv(CoreTable$LKADT_P, 
-                                   CoreTable$DEATH=="YES"),
+                                   CoreTable$DEATH==1),#"YES"),
                    form, transform="id", key="RPT",
                    useResp=T) {
   imp.varname <- as.character(form)[2]
@@ -284,7 +284,7 @@ MCARimp <- function(data, impvar) {
 imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
                 min.obs.num=nrow(data), num.preds=NULL,
                 survobject=Surv(CoreTable$LKADT_P,
-                                CoreTable$DEATH=="YES"),
+                                CoreTable$DEATH==1),#"YES"),
                 key="RPT", impType, avoid) {
   dataout <- data
   nImp <- length(impvars)
@@ -394,10 +394,10 @@ testDataMAR <- imp(testTemp, impute, cF,
                     alpha=0.05, min.obs.num=nrow(testTemp), num.preds=5,
                     key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
 
-#trainDataMARwR <- imp(trainTemp, impute, cF,
-#                     alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
-#                     survobject=Surv(trainTemp, trainTemp$DEATH==1),
-#                     key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
+trainDataMARwR <- imp(trainTemp, impute, cF,
+                     alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
+                     survobject=Surv(trainTemp$LKADT_P, trainTemp$DEATH==1),
+                     key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
 ```
 
 ```{r gradientBoosting}
@@ -405,9 +405,7 @@ gradBoostMCAR <- gradBM(trainDataMCAR, testDataMCAR, ntrees = 1000, shrinkage = 
 
 gradBoostMAR <- gradBM(trainDataMAR, testDataMAR, ntrees = 1000, shrinkage = 1)
 
-#gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage = 1)
+gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage = 1)
 
-#gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
+gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
 ```
-
-
