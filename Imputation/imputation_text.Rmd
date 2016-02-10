@@ -1,0 +1,11 @@
+---
+title: "imputation - text"
+author: "Anne Petersen"
+output: html_document
+---
+
+We apply three different imputation strategies: Imputation under the missing completely at random (MCAR) assumption and imputation under the missing at random (MAR) assumption, using either only other predictors for modelling the varibale with missing values or using both other predictors and components from the response variable from the survival time model, as suggested by White \& Royston (2009). 
+
+The MCAR assumption implies, as the name suggests, that the mechanism resulting in missing values is completely random and independent of all marginal and multivariate distributions in the data. This imputation scheme is implemented by drawing observations randomly from the marginal distribution of the variable to be imputed. 
+
+The two other imputation methods involve fitting models with the variable to be imputed as response variable and a number of predictors. In both the strategies outlined above, we use up to five(???) predictors from the total set of predictors in the data to fit either normal, linear models (for continuous responses) or logit regression models (for binary responses), whose predicted values for the missing observations constitute the imputations. The five predictors are the variables that have the strongest marginal effects on the response in terms of $p$-values. Only variables with $p <= 0.05$ (???) and no missing observations are considered. In the White \& Royston setup, two additional predictor variables are included, namely the Nelson-Aalen estimate of the cummulative hazard and the indicator variable for censoring. White \& Royston show that such a model has the best imputation properties in a simulation setup (MORE PRECISE?), compared to both of the other imputation schemes mentioned here and a number of other methods. The imputation models are constructed using the original dataset, so imputed variables cannot be predictors for other imputation models. This means that no concerns about the order in which the imputations are conducted are necessary. SOMETHING MORE ABOUT THIS? REFERENCE TO MULTIPLE IMPUTATION STUFF? Categorical variables with more than two levels are imputed using the MCAR strategy outlined above, as no results for models of this type are provided in White \& Royston (SUFFICIENT ARGUMENT?). 
