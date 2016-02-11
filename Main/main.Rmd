@@ -20,6 +20,11 @@ library(mice)
 library(glmnet)
 library(gbm)
 library(randomForestSRC)
+library(ggplot2)
+library(survival)
+library(mgcv)
+library(timeROC)
+library(Bolstad2)
 ```
 
 ```{r Data, eval=FALSE}
@@ -622,4 +627,149 @@ AUCrandomForestMARwR2 <- with(valiData, timeROC(T=LKADT_P,
                                  iid = FALSE)$AUC)
 iAUCrandomForestMARwR2 <- sintegral(times, AUCrandomForestMARwR2)$int / (max(times) - min(times))
 iAUCrandomForestMARwR2
+```
+
+```{r gam, eval=FALSE}
+form <- LKADT_P ~ s(log(ALP)) + s(HB) + s(log(AST)) + s(log(PSA)) + s(ALB) +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES + ANALGESICS
+
+survGamMCAR <- gam(form, data = trainDataMCAR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMCAR)
+survGamMCAR <- update(survGamMCAR, . ~ . - ANALGESICS - s(ALB))
+
+survGamMAR <- gam(form, data = trainDataMAR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMAR)
+survGamMAR <- update(survGamMAR, . ~ . - ANALGESICS - s(ALB))
+
+survGamMARwR <- gam(form, data = trainDataMARwR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMARwR)
+survGamMARwR <- update(survGamMARwR, . ~ . - ANALGESICS - LYMPH_NODES)
+```
+
+```{r gamAUC, eval=FALSE}
+times <- seq(12,24,by=1) * 30.5
+# MCAR
+covars <- c("ALP", "HB", "AST", "PSA", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+valiData <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMCAR <- with(valiData, timeROC(T=LKADT_P, 
+                                delta=DEATH,
+                                marker=predict.gam(survGamMCAR,valiData,type="link"),
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCgamMCAR <- sintegral(times, AUCgamMCAR)$int / (max(times) - min(times))
+iAUCgamMCAR
+# MAR
+covars <- c("ALP", "HB", "AST", "PSA", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+valiData <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMAR <- with(valiData, timeROC(T=LKADT_P, 
+                                delta=DEATH,
+                                marker=predict.gam(survGamMAR,valiData,type="link"),
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCgamMAR <- sintegral(times, AUCgamMAR)$int / (max(times) - min(times))
+iAUCgamMAR
+# MARwR1
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL")
+valiData <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMARwR1 <- with(valiData, timeROC(T=LKADT_P, 
+                                delta=DEATH,
+                                marker=predict.gam(survGamMARwR,valiData,type="link"),
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCgamMARwR1 <- sintegral(times, AUCgamMARwR1)$int / (max(times) - min(times))
+iAUCgamMARwR1
+# MARwR2
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL")
+valiData <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMARwR2 <- with(valiData, timeROC(T=LKADT_P, 
+                                delta=DEATH,
+                                marker=predict.gam(survGamMARwR,valiData,type="link"),
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCgamMARwR2 <- sintegral(times, AUCgamMARwR2)$int / (max(times) - min(times))
+iAUCgamMAR
+```
+
+```{r Cox}
+form <- Surv(LKADT_P,DEATH==1) ~ log(ALP) + HB + log(AST) + log(PSA) + ALB +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES 
+
+coxMCAR <- coxph(form, data= trainDataMCAR)
+
+coxMAR <- coxph(form, data= trainDataMAR)
+
+coxMARwR <- coxph(form, data= trainDataMARwR)
+```
+
+```{r coxAUC}
+times <- seq(12,24,by=1) * 30.5
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+# MCAR
+tmpTest <- testDataMCAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMCAR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMCAR <- with(valiData, timeROC(T=time, 
+                                delta=status,
+                                marker=.fitted,
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCcoxMCAR <- sintegral(times, AUCcoxMCAR)$int / (max(times) - min(times))
+iAUCcoxMCAR
+# MAR
+tmpTest <- testDataMAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMAR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMAR <- with(valiData, timeROC(T=time, 
+                                delta=status,
+                                marker=.fitted,
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCcoxMAR <- sintegral(times, AUCcoxMAR)$int / (max(times) - min(times))
+iAUCcoxMAR
+# MARwR1
+tmpTest <- testDataMCAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMARwR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMARwR1 <- with(valiData, timeROC(T=time, 
+                                delta=status,
+                                marker=.fitted,
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCcoxMARwR1 <- sintegral(times, AUCcoxMARwR1)$int / (max(times) - min(times))
+iAUCcoxMARwR1
+# MARwR2
+tmpTest <- testDataMAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMARwR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMARwR2 <- with(valiData, timeROC(T=time, 
+                                delta=status,
+                                marker=.fitted,
+                                cause=1,
+                                weighting="marginal",
+                                times=times,
+                                iid=FALSE)$AUC)
+iAUCcoxMARwR2 <- sintegral(times, AUCcoxMARwR2)$int / (max(times) - min(times))
+iAUCcoxMARwR2
+```
+
+```{r iaucTable}
+iaucTab <- cbind(rep("-", 4),
+                 rep("-", 4),
+                 c(iAUCcoxMCAR, iAUCcoxMAR, iAUCcoxMARwR1, iAUCcoxMARwR2),
+                 c(iAUCgamMCAR, iAUCgamMAR, iAUCgamMARwR1, iAUCgamMARwR2)) 
+print(iaucTab, type = "html")
 ```
