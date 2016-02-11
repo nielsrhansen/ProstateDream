@@ -9,7 +9,7 @@ output:
     theme: flatly
 ---
 
-## Data Management
+# Data Management
 
 ```{r Preamble, eval=FALSE}
 rm(list=ls())
@@ -126,9 +126,9 @@ for(i in 1:length(disVarCT)) {
 CoreTable$DEATH <- ifelse(CoreTable$DEATH == "NO", 0, 1)
 ```
 
-## Imputation
+# Imputation
 
-# Function
+## Function
 
 ```{r AnnesImputationFunctions, eval=FALSE}
 #Function that finds the "num.preds" strongest marginal predictors
@@ -329,7 +329,7 @@ imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
 }
 ```
 
-# Test/Training Data
+## Test/Training Data
 
 ```{r TestTraing, eval=FALSE}
 set.seed(5)
@@ -339,7 +339,7 @@ trainTemp <- CoreTable[train_idx,]
 testTemp <- CoreTable[-train_idx,] 
 ```
 
-# Impute
+## Impute
 
 ```{r ImputationSetup, eval=FALSE}
 nonPreds <- c("DOMAIN", "RPT", "LKADT_P", "DEATH", "DISCONT",
@@ -373,9 +373,9 @@ trainDataMARwR <- imp(trainTemp, impute, cF,
                      key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
 ```
 
-## Gradient Boosting
+# Gradient Boosting
 
-# Function
+## Function
 
 ```{r SorensBoostingFunction, eval=FALSE}
 gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
@@ -419,7 +419,7 @@ gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
 }
 ```
 
-# Boost
+## Boost
 
 ```{r gradientBoosting, eval=FALSE}
 gradBoostMCAR <- gradBM(trainDataMCAR, testDataMCAR, ntrees = 1000, shrinkage = 1)
@@ -431,7 +431,7 @@ gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage
 gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
 ```
 
-# iAUC
+## iAUC
 
 ```{r MCARiAUCboosting, eval=FALSE}
 # MCAR
@@ -512,9 +512,9 @@ iAUCgradBoostMARwR2 <- sintegral(times, AUCgradBoostMARwR2)$int / (max(times) - 
 iAUCgradBoostMARwR2
 ```
 
-## Random Forest for Survival
+# Random Forest for Survival
 
-# Function
+## Function
 
 ```{r sorensRandomForestFunction, eval=FALSE}
 survForest <- function(train, test) {
@@ -531,7 +531,7 @@ survForest <- function(train, test) {
 }
 ```
 
-# Forest
+## Forest
  
 ```{r randomForest, eval=FALSE}
 randomForestMCAR <- survForest(trainDataMCAR, testDataMCAR)
@@ -543,7 +543,7 @@ randomForestMARwR1 <- survForest(trainDataMARwR, testDataMCAR)
 randomForestMARwR2 <- survForest(trainDataMARwR, testDataMAR)
 ```
 
-# iAUC
+## iAUC
 
 ```{r randomForestAUC, eval=FALSE}
 # MCAR
