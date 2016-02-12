@@ -1,13 +1,16 @@
+## Required packages
+library(mice)
+
 #Function that finds the "num.preds" strongest marginal predictors
 #for a given variable ("response") using all variables in the 
 #dataset that have at least "min.obs.num" non-missing observations
 #and whose names are not included in the "avoid" vector.
-predsForm <- function(data=CoreTable, 
-                          avoid=NULL,
-                          response, alpha=0.05, transform="id",
-                          num.preds=1, modeltype="linear",
-                          min.obs.num=0,
-                          print.mode=FALSE) {
+predsForm <- function(data, 
+                      avoid=NULL,
+                      response, alpha=0.05, transform="id",
+                      num.preds=1, modeltype="linear",
+                      min.obs.num=0,
+                      print.mode=FALSE) {
   avoid <- c(response, avoid)
   predictors <- subset(data, select=!(names(data) %in% avoid))
   n.predictors <- ncol(predictors)
@@ -91,8 +94,8 @@ predsForm <- function(data=CoreTable,
 #imputed with predicted values from that model in every 
 #NA occurence.
 MARimp <- function(data, modeltype="linear", 
-                        survobject=Surv(CoreTable$LKADT_P, 
-                                        CoreTable$DEATH=="YES"),
+                        survobject=Surv(data$LKADT_P, 
+                                        data$DEATH=="YES"),
                         form, transform="id", key="RPT",
                    useResp=T) {
   imp.varname <- as.character(form)[2]
@@ -161,8 +164,8 @@ MCARimp <- function(data, impvar) {
 #Wrapper function that performs imputation
 imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
                 min.obs.num=nrow(data), num.preds=NULL,
-                survobject=Surv(CoreTable$LKADT_P,
-                                CoreTable$DEATH=="YES"),
+                survobject=Surv(data$LKADT_P,
+                                data$DEATH=="YES"),
                 key="RPT", impType, avoid) {
   dataout <- data
   nImp <- length(impvars)
