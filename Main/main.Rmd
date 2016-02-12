@@ -5,407 +5,217 @@ date: "02/09/2016"
 output: html_document
 ---
 
-```{r Preamble}
-rm(list=ls())
+```{r Preamble, echo=FALSE}
 gc()
-
-library(survival)
-library(mice)
-library(glmnet)
-library(gbm)
+setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
+source("../Boosting/gbm.R")
+source("../SurvivalForests/survForests.R")
+source("../Imputation/imputation.R")
+source("../SynapseScripts/score.R")
+source("../Gam/gam.R")
+source("../StabilitySelection/stabSelect.R")
 ```
 
 ```{r Data}
-setwd("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Data/")
-temp <- list.files(pattern="*.csv")
-allData <- lapply(temp, function(x) read.delim(file = x, header = TRUE, sep = ",",
-                                               na.strings = c(" ", "", "."),
-                                               stringsAsFactors=FALSE))
-setwd("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream")
-
-CoreTableDict <- allData[[1]]
-CoreTable <- allData[[2]]
+load("../Data/Prostate_all.RData")
+training <- CoreTable_training
+CoreTableDict <- read.table(file = "../Data/DataDictionary.csv", 
+                            header = TRUE, sep = ";",
+                            na.strings = c(" ", "", "."),
+                            stringsAsFactors = FALSE)
 ```
 
 ```{r DataManipulation}
-# Anne's data manipulation
 discard <-  c("HGTBLCAT", "WGTBLCAT", "HEAD_AND_NECK", 
               "PANCREAS", "THYROID", "CREACLCA", "CREACL", 
               "GLEAS_DX", "STOMACH")
-CoreTable <- subset(CoreTable, select = -which(colnames(CoreTable) %in% discard))
+training <- subset(training, select = -which(colnames(training) %in% discard))
 
-CoreTable <- transform(CoreTable, 
+training <- transform(training, 
                       PSA = ifelse(PSA == 0, 0.01, PSA),
                       ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
 
-for (i in seq_len(ncol(CoreTable))) {
-  if (is.factor(CoreTable[, i])) {
-    tmp <- as.character(CoreTable[, i])
-    tmp[tmp == ""] <- "No"
-    CoreTable[, i] <- factor(tmp)
+for (i in seq_len(ncol(training))) {
+  if (is.factor(training[, i])) {
+    tmp <- as.character(training[, i])
+    tmp[tmp == ""] <- "NO"
+    training[, i] <- factor(tmp)
   }
 }
 
-# classFrame
+training$RACE_C[training$RACE_C == "Missing"] <- NA
+training$REGION_C[training$REGION_C == "MISSING"] <- NA
+
+varLevels <- sapply(training, function(x) length(unique(x)))
+oneVarLevel <- names(varLevels[varLevels == 1])
+tt <- aggregate(x = training, by = list(training$STUDYID), function(x) {
+   ifelse(sum(!duplicated(x)) == 1, NA, sum(!duplicated(x)))
+})
+nas <- colSums(is.na(tt))
+notAllStudies <- names(training)[!(names(training) %in% names(nas[nas == 0]))]
+notTwoStudies <- names(training)[!(names(training) %in% names(nas[nas %in% 0:1]))]
+discardedVars <- c(oneVarLevel, notTwoStudies,
+                  "DISCONT", "ENTRT_PC", "ENDTRS_C", "AGEGRP", 
+                  "TRT1_ID", "TRT2_ID", "TRT3_ID")  
+training <- subset(training, 
+                   select = c(names(training)[!(names(training) %in% discardedVars)]))
+ 
+conVarCT <- CoreTableDict$Name[CoreTableDict$Type == "NUM" & CoreTableDict$Name %in% names(training)]
+disVarCT <- CoreTableDict$Name[CoreTableDict$Type == "CHAR" & CoreTableDict$Name %in% names(training)]
+
+for(i in 1:length(conVarCT)){
+  training[, conVarCT[i]] <- as.numeric(as.character(training[, conVarCT[i]]))
+}
+for(i in 1:length(disVarCT)){
+  training[, disVarCT[i]] <- factor(training[, disVarCT[i]])
+}
+
+for(i in 1:length(disVarCT)) {
+  if(nlevels(training[,disVarCT[i]]) == 2) {
+    levels(training[,disVarCT[i]]) <- ifelse(levels(training[,disVarCT[i]]) == c("NO", "Y"), 
+                                            c("NO", "YES"), 
+                                            levels(training[,disVarCT[i]]))
+  }
+}
+
+training$DEATH <- ifelse(training$DEATH == "NO", 0, 1)
+```
+
+```{r TestTraining}
+set.seed(5)
+train_idx <- sample(1:nrow(training), floor(0.8 * nrow(training)), replace = FALSE)
+trainTemp <- training[train_idx, ] 
+testTemp <- training[-train_idx, ] 
+```
+
+
+###Perform imputations
+
+You can skip only selecting missing variables to impute, but the code will run faster if you do and it makes it easier to tell which variables were actually imputed. You will need to specify which variables to not use for model fitting (the `nonPreds` variables) for the MAR imputation methods.
+
+
+```{r classFrame}
 logPreds <- c("CREAT", "LDH", "NEU", "PSA", "WBC", "CREACL", 
               "MG", "BUN", "CCRC")
 catPreds <- c("RACE_C", "REGION_C", "ECOG_C", "STUDYID",
               "AGEGRP2", "SMOKE", "SMOKFREQ", "AGEGRP")
-binPreds <- names(CoreTable)[50:122]
-
-classFrame <- data.frame(names=names(CoreTable), 
-                         modeltype=factor(rep("linear",
-                                              ncol(CoreTable)),
-                                          levels=c("linear",
-                                                   "factor",
-                                                   "binary")),
-                         transform=factor(rep("id", ncol(CoreTable)),
-                                          levels=c("id", "log")))
-
-for (i in 1:length(logPreds)) {
-  classFrame[classFrame$names==logPreds[i], "transform"] <- "log"
-}
-for (i in 1:length(catPreds)) {
-  classFrame[classFrame$names==catPreds[i], "modeltype"] <- "factor"
-}
-for (i in 1:length(binPreds)) {
-  classFrame[classFrame$names==binPreds[i], "modeltype"] <- "binary"
-}
-
-# More data manipulation...
-tmp <- na.omit(CoreTableDict$Var.Name[substring(CoreTableDict$Comment, 1, 1) == "Y" & CoreTableDict$Var.Name %in% names(CoreTable)])
-CoreTable[tmp][is.na(CoreTable[tmp])] <- "NO"
-CoreTable$DEATH[is.na(CoreTable$DEATH)] <- "NO"
-CoreTable$RACE_C[CoreTable$RACE_C == "Missing"] <- NA
-CoreTable$REGION_C[CoreTable$REGION_C == "MISSING"] <- NA
-
-missingAllCT <- names(CoreTable[apply(CoreTable, 2, 
-                                      function(x) sum(is.na(x))) == nrow(CoreTable)])
-varLevels <- sapply(CoreTable, function(x) length(unique(x)))
-oneVarLevel <- names(varLevels[varLevels == 1])
-tt <- aggregate(x = CoreTable, by = list(CoreTable$STUDYID), function(x) {
-  ifelse(sum(!duplicated(x)) == 1, NA, sum(!duplicated(x)))
-})
-nas <- colSums(is.na(tt))
-notAllStudies <- names(CoreTable)[!(names(CoreTable) %in% names(nas[nas == 0]))]
-notTwoStudies <- names(CoreTable)[!(names(CoreTable) %in% names(nas[nas %in% 0:1]))]
-discardedVars <- c(missingAllCT, oneVarLevel, notTwoStudies,
-                   "DISCONT", "ENTRT_PC", "ENDTRS_C", "AGEGRP", 
-                   "TRT1_ID", "TRT2_ID", "TRT3_ID"
-                   )  
-CoreTable <- subset(CoreTable, 
-                    select = c(names(CoreTable)[!(names(CoreTable) %in% discardedVars)],
-                               "STUDYID"))
-
-conVarCT <- CoreTableDict$Var.Name[CoreTableDict$Type == "NUM" & CoreTableDict$Var.Name %in% names(CoreTable)]
-conVarCT <- conVarCT[conVarCT != "NA"]
-disVarCT <- CoreTableDict$Var.Name[CoreTableDict$Type == "CHAR" & CoreTableDict$Var.Name %in% names(CoreTable)]
-
-for(i in 1:length(conVarCT)){
-  CoreTable[,conVarCT[i]] <- as.numeric(as.character(CoreTable[,conVarCT[i]]))
-}
-for(i in 1:length(disVarCT)){
-  CoreTable[,disVarCT[i]] <- factor(CoreTable[,disVarCT[i]])
-}
-
-for(i in 1:length(disVarCT)) {
-  if(nlevels(CoreTable[,disVarCT[i]]) == 2) {
-    levels(CoreTable[,disVarCT[i]]) <- ifelse(levels(CoreTable[,disVarCT[i]]) == c("NO", "Y"), 
-                                            c("NO", "YES"), 
-                                            levels(CoreTable[,disVarCT[i]]))
-  }
-}
-
-CoreTable$DEATH <- ifelse(CoreTable$DEATH == "NO", 0, 1)
-```
-
-```{r AnnesImputationFunctions}
-#Function that finds the "num.preds" strongest marginal predictors
-#for a given variable ("response") using all variables in the 
-#dataset that have at least "min.obs.num" non-missing observations
-#and whose names are not included in the "avoid" vector.
-predsForm <- function(data=CoreTable, 
-                      avoid=NULL,
-                      response, alpha=0.05, transform="id",
-                      num.preds=1, modeltype="linear",
-                      min.obs.num=0,
-                      print.mode=FALSE) {
-  avoid <- c(response, avoid)
-  predictors <- subset(data, select=!(names(data) %in% avoid))
-  n.predictors <- ncol(predictors)
-  use.names <- c("dropme")
-  use.ps <- numeric(0)
-  for (i in 1:n.predictors) {
-    working.vars <- na.omit(cbind(data[,response],predictors[,i]))
-    if (nrow(na.omit(working.vars)) > 0 & 
-          length(levels(factor(working.vars[,2]))) > 1 ) {
-      if (transform=="id") {
-        if (modeltype=="linear") {
-          model <- lm(data[,response] ~ predictors[,i])
-          testtype <- "F"
-        }
-        if (modeltype=="binary") {
-          model <- glm(data[,response] ~ predictors[,i], 
-                       family=binomial)
-          testtype <- "LRT"
-        }
-      }
-      if (transform=="log") {
-        model <- lm(log(data[,response]+0.1) ~ predictors[,i], 
-                    subset=!is.na(data[,response]))
-        testtype <- "F"
-      }
-      p <- anova(model, test=testtype)["predictors[, i]",5]
-      if (p <=alpha) {
-        use.names <- c(use.names, names(predictors)[i])
-        use.ps <- c(use.ps, p)
-      }
-    }
-  }
-  use.names <- use.names[-1]
-  use.frame <- data.frame(use.names, use.ps)
-  use.frame <- use.frame[order(use.frame$use.ps),]
-  
-  if (length(use.names) <= num.preds) {
-    max.preds=length(use.names)
-  } else {max.preds <- num.preds}
-  
-  if (length(use.names) >= 1) {
-    use.us <- c("dropme")
-    pred.num <- 0
-    firstname <- use.frame$use.names[1]
-    data.use <- data[, "LKADT_P"] #arbitrary variable with no NAs
-    i <- 1
-    still.vars.left <- TRUE
-    while (pred.num < max.preds & still.vars.left) {
-      name <- as.character(use.frame$use.names[i])
-      data.use.maybe <- cbind(data.use, data[,name])
-      
-      if (nrow(na.omit(data.use.maybe)) >= min.obs.num) {
-        use.us <- c(use.us,name)
-        data.use <- data.use.maybe
-        pred.num <- pred.num + 1
-      }
-      i <- i+1
-      if (i == length(use.names)) {
-        still.vars.left <- FALSE
-      } 
-      num.preds <- length(use.us)-1
-    }
-    use.us <- use.us[-1]
-  } else {use.us <- c("1")}
-  if (length(use.us)==0) {use.us <- c("1")}
-  if (transform=="log") {
-    resp.str <- paste("log(", response, "+0.1) ~ ", sep="")
-  } else {
-    resp.str <- paste(response, "~", " ")
-  }
-  returnform <- as.formula(paste(resp.str, 
-                                 paste(use.us, collapse="+")))  
-  returnform
-}
-
-
-#Function that takes a formula object and, if "useResp"=T,
-#adds the Nelson-Aalen estimate of the cumulative hazard and 
-#the status indicator from the provided "survobject" as 
-#predictors, fits a model and returns the variable to be 
-#imputed with predicted values from that model in every 
-#NA occurence.
-MARimp <- function(data, modeltype="linear", 
-                   survobject=Surv(CoreTable$LKADT_P, 
-                                   CoreTable$DEATH==1),#"YES"),
-                   form, transform="id", key="RPT",
-                   useResp=T) {
-  imp.varname <- as.character(form)[2]
-  if (substr(imp.varname, 1,4)=="log(") {
-    imp.varname <- substr(imp.varname, 5, nchar(imp.varname)-7)
-  }
-  
-  if (useResp) {
-    time <- survobject[, "time"]
-    status <- survobject[, "status"]
-    data <- cbind(data, time, status)
-    #Compute Nelson-Aalen estimate of cumulative hazard
-    H.hat <- nelsonaalen(data=data, time=time, status=status)
-    data <- cbind(data, H.hat)
-    form <- update(form, ~. + status + H.hat)
-  }
-  #Linear regression 
-  if (modeltype=="linear") {
-    model <- lm(form, data=data)
-    estimates <- predict(model, newdata=data)
-    #Log-transformation
-    if (transform=="log") {
-      returnvar <- exp(estimates)-0.1    
-    }
-  }
-  #Binary regression/classification
-  if (modeltype=="binary") {
-    data[, imp.varname] <- factor(data[, imp.varname])
-    imp.var.levels <- levels(factor(data[,imp.varname]))
-    ref.level <- imp.var.levels[1]
-    data[,imp.varname] <- relevel(data[, imp.varname], ref=ref.level)
-    model <- glm(form, data=data, family=binomial)
-    estimates <- predict(model, newdata=data, type="response")
-    for (i in 1:length(estimates)) {
-      if (!is.na(estimates[i])) {
-        if (estimates[i]<0.5) {
-          estimates[i] <- ref.level
-        } else if (estimates[i]>=0.5) { 
-          estimates[i] <- imp.var.levels[2]
-        }
-      }
-    }
-    estimates <- factor(estimates)
-  }
-  is.missing <- data[is.na(data[, imp.varname]), key]
-  returnvars <- data[, c(imp.varname, key)]
-  returnvars[returnvars[,key] %in% is.missing, 
-             imp.varname] <- estimates[returnvars[,key] %in%
-                                         is.missing]
-  returnvar <- returnvars[, imp.varname]
-  returnvar
-}
-
-
-#Function that does MCAR imputation for the "impvar" variable
-MCARimp <- function(data, impvar) {
-  n <- nrow(data)
-  outvar <- data[, impvar]
-  impvar_noNA <- outvar[!is.na(outvar)]
-  n_noNA <- length(impvar_noNA)
-  ind <-  sample(1:n_noNA, n-n_noNA, replace=T)
-  outvar[is.na(outvar)] <- impvar_noNA[ind]
-  outvar
-}
-
-#Wrapper function that performs imputation
-imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
-                min.obs.num=nrow(data), num.preds=NULL,
-                survobject=Surv(CoreTable$LKADT_P,
-                                CoreTable$DEATH==1),#"YES"),
-                key="RPT", impType, avoid) {
-  dataout <- data
-  nImp <- length(impvars)
-  if (impType == "MCAR") {
-    for (i in 1:nImp) {
-      outvar <- impvars[i]
-      dataout[, outvar] <- MCARimp(data, outvar)
-    }
-  }
-  if (impType == "MARresp" | impType=="MAR") {
-    useResp <- F
-    if (impType=="MARresp") useResp <- T 
-    for (i in 1:nImp) {
-      outvar <- impvars[i]
-      modeltype <- classFrame[classFrame$names==outvar, "modeltype"]
-      if (modeltype=="factor") {
-        dataout[, outvar] <- MCARimp(data, outvar)
-      } else {
-        transform <- classFrame[classFrame$names==outvar, "transform"]
-        form <- predsForm(data, avoid=avoid, outvar,
-                          alpha, transform, num.preds, 
-                          modeltype, min.obs.num)
-        dataout[, outvar] <- MARimp(data, modeltype, 
-                                    survobject, form,
-                                    transform, key,
-                                    useResp=useResp)
-      }
-    }
-  }
-  dataout
-}
-```
-
-```{r SorensBoostingFunction}
-gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
-  
-  # fit a Cox LASSO
-  cox.mm <- model.matrix(~ . - 1, data = 
-                           train[,setdiff(names(train), c("LKADT_P", "DEATH"))])
-  cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
-                      family = "cox")
-  
-  coefs <- coef(cox.cv, s = "lambda.min")
-  act.index <- which(coefs != 0)
-  
-  # select the active variables to be fitted in the gbmsci
-  var.index <- unique(attributes(cox.mm)$assign[act.index])
-  xx.v <- (train[,setdiff(names(train), c("LKADT_P", "DEATH"))])[, var.index]
-  
-  
-  gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
-                               paste(names(xx.v), collapse = " + "), 
-                               collapse = "")) 
-  
-  
-  gbm.o <- gbm(gbm.form, data = train,
-               weights = rep(1, nrow(train)),
-               var.monotone = rep(0, ncol(xx.v)),
-               distribution = "sci",
-               n.trees = ntrees,
-               shrinkage = shrinkage,
-               interaction.depth = 3,
-               bag.fraction = 0.5,
-               train.fraction = 1,
-               cv.folds = 5,
-               n.minobsinnode = 10,
-               keep.data = TRUE,
-               verbose = FALSE)
-  
-  best.iter <- gbm.perf(gbm.o, method = "cv")
-  -predict(gbm.o, test, best.iter)
-  
-}
-```
-
-```{r TestTraing}
-set.seed(5)
-subC <- subset(CoreTable, select = which(!(names(CoreTable) %in% c("RPT", "STUDYID"))))
-train_idx <- sample(1:nrow(subC), floor(0.8 * nrow(subC)), replace = FALSE)
-trainTemp <- CoreTable[train_idx,] 
-testTemp <- CoreTable[-train_idx,] 
-```
-
-```{r ImputationSetup}
+binPreds <- setdiff(names(training), c(conVarCT, catPreds))
 nonPreds <- c("DOMAIN", "RPT", "LKADT_P", "DEATH", "DISCONT",
               "ENDTRS_C", "ENTRT_PC", "PER_REF", "LKADT_REF",
               "LKADT_PER")
-allVars <- names(CoreTable)
-impute <- rep(NA, ncol(CoreTable)) 
-for (i in 1:ncol(CoreTable)) {
-  impute[i] <- any(is.na(CoreTable[,i]))
-}
-impute <- allVars[impute]
-impute <- impute[!(impute %in% nonPreds)]
+
+classFrame <- data.frame(
+  names = names(training), 
+  modeltype = factor(rep("linear", ncol(training)),
+                     levels = c("linear", "factor", "binary")),
+  transform = factor(rep("id", ncol(training)), levels=c("id", "log"))
+)
+
+classFrame[classFrame$names %in% logPreds, "transform"] <- "log"
+classFrame[classFrame$names %in% catPreds, "modeltype"] <- "factor"
+classFrame[classFrame$names %in% binPreds, "modeltype"] <- "binary"
+
+impute <- setdiff(
+  names(training)[apply(is.na(training), 2, any)],
+  nonPreds)
 ```
 
 ```{r x7imputations}
-cF <- classFrame[classFrame$names %in% impute, ]
+cF <- subset(classFrame, names %in% impute)
+idInd <- which("RPT" == names(training))
 
-trainDataMCAR <- imp(trainTemp, impute, impType="MCAR")
-testDataMCAR <- imp(testTemp, impute, impType="MCAR")
+trainMCAR <- imp(trainTemp, impute, impType="MCAR")[, -idInd]
+testMCAR <- imp(testTemp, impute, impType="MCAR")[, -idInd]
 
-trainDataMAR <- imp(trainTemp, impute, cF,
-                    alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
-                    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
-testDataMAR <- imp(testTemp, impute, cF,
-                    alpha=0.05, min.obs.num=nrow(testTemp), num.preds=5,
-                    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+trainMAR <- imp(trainTemp, impute, cF,
+                alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
+                key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))[, -idInd]
 
-trainDataMARwR <- imp(trainTemp, impute, cF,
-                     alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
-                     survobject=Surv(trainTemp$LKADT_P, trainTemp$DEATH==1),
-                     key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
+testMAR <- imp(testTemp, impute, cF,
+               alpha=0.05, min.obs.num=nrow(testTemp), num.preds=5,
+               key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))[, -idInd]
+
+trainMARwR <- imp(trainTemp, impute, cF,
+                  alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
+                  survobject=Surv(trainTemp$LKADT_P, trainTemp$DEATH==1),
+                  key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))[, -idInd]
 ```
 
-```{r gradientBoosting}
-gradBoostMCAR <- gradBM(trainDataMCAR, testDataMCAR, ntrees = 1000, shrinkage = 1)
 
-gradBoostMAR <- gradBM(trainDataMAR, testDataMAR, ntrees = 1000, shrinkage = 1)
-
-gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage = 1)
-
-gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
+```{r stabilitySelection}
+stabSelectMCAR <- stabSelect(trainMCAR, trace = TRUE)
+stabSelectMAR <- stabSelect(trainMAR, trace = TRUE)
+stabSelectMARwR <- stabSelect(trainMARwR, trace = TRUE)
+varSelectMCAR <- as.character(with(stabSelectMCAR, var[freq > 0.5]))
+varSelectMAR <- as.character(with(stabSelectMAR, var[freq > 0.5]))
+varSelectMARwR <- as.character(with(stabSelectMARwR, var[freq > 0.5]))
 ```
+
+```{r}
+p1 <- plot(stabSelectMCAR)
+p2 <- plot(stabSelectMAR)
+gridExtra::grid.arrange(p1, p2)
+```
+
+
+```{r modelFitting}
+## Lasso 
+lassoMCAR <- lasso(trainMCAR, testMCAR)
+lassoMAR <- lasso(trainMAR, testMAR)
+lassoDebiasMCAR <- lasso(trainMCAR, testMCAR, debiased = TRUE)
+lassoDebiasMAR <- lasso(trainMAR, testMAR, debiased = TRUE)
+
+## Stability selection with coxph
+coxMCAR <- cox(trainMCAR, testMCAR, varSelectMCAR)
+coxMAR <- cox(trainMAR, testMAR, varSelectMAR)
+
+## Gradient boosting
+gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+
+## Gradient boosting with stability selection
+gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+
+## Survival forests
+forestMCAR <- survForest(trainMCAR, testMCAR)
+forestMAR <- survForest(trainMAR, testMAR)
+
+## Survival forests with stability selection
+forestStabMCAR <- survForest(trainMCAR, testMCAR, varNames = varSelectMCAR)
+forestStabMAR <- survForest(trainMAR, testMAR, varNames = varSelectMAR)
+
+## Gam 
+gamMCAR <- gamPred(trainMCAR, testMCAR, varNames = varSelectMCAR, conVarCT, disVarCT) 
+gamMAR <- gamPred(trainMAR, testMAR, varNames = varSelectMAR, conVarCT, disVarCT)
+```
+
+
+```{r scoring}
+## Lasso
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoMAR)
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoDebiasMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoDebiasMAR)
+
+## Cox
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, coxMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, coxMAR)
+
+## Gradient boosting
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbMAR)
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbStabMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbStabMAR)
+
+## Forests
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestMAR)
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestStabMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestStabMAR)
+
+## Gam
+score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gamMCAR)
+score_q1a(testMAR$LKADT_P, testMAR$DEATH, gamMAR)
+```
+
