@@ -25,6 +25,8 @@ CoreTableDict <- read.table(file = "../Data/DataDictionary.csv",
                             stringsAsFactors = FALSE)
 ```
 
+### Data preparation
+
 ```{r DataManipulation}
 discard <-  c("HGTBLCAT", "WGTBLCAT", "HEAD_AND_NECK", 
               "PANCREAS", "THYROID", "CREACLCA", "CREACL", 
@@ -81,18 +83,16 @@ for(i in 1:length(disVarCT)) {
 training$DEATH <- ifelse(training$DEATH == "NO", 0, 1)
 ```
 
+### Splitting
+
 ```{r TestTraining}
-set.seed(5)
+set.seed(10)
 train_idx <- sample(1:nrow(training), floor(0.8 * nrow(training)), replace = FALSE)
 trainTemp <- training[train_idx, ] 
 testTemp <- training[-train_idx, ] 
 ```
 
-
-###Perform imputations
-
-You can skip only selecting missing variables to impute, but the code will run faster if you do and it makes it easier to tell which variables were actually imputed. You will need to specify which variables to not use for model fitting (the `nonPreds` variables) for the MAR imputation methods.
-
+### Imputations
 
 ```{r classFrame}
 logPreds <- c("CREAT", "LDH", "NEU", "PSA", "WBC", "CREACL", 
@@ -141,81 +141,92 @@ trainMARwR <- imp(trainTemp, impute, cF,
                   key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))[, -idInd]
 ```
 
+### Stability selection
 
 ```{r stabilitySelection}
-stabSelectMCAR <- stabSelect(trainMCAR, trace = TRUE)
-stabSelectMAR <- stabSelect(trainMAR, trace = TRUE)
-stabSelectMARwR <- stabSelect(trainMARwR, trace = TRUE)
+stabSelectMCAR <- stabSelect(trainMCAR, trace = FALSE)
+stabSelectMAR <- stabSelect(trainMAR, trace = FALSE)
+stabSelectMARwR <- stabSelect(trainMARwR, trace = FALSE)
 varSelectMCAR <- as.character(with(stabSelectMCAR, var[freq > 0.5]))
 varSelectMAR <- as.character(with(stabSelectMAR, var[freq > 0.5]))
 varSelectMARwR <- as.character(with(stabSelectMARwR, var[freq > 0.5]))
 ```
 
-```{r}
+```{r, fig.height=12}
 p1 <- plot(stabSelectMCAR)
 p2 <- plot(stabSelectMAR)
-gridExtra::grid.arrange(p1, p2)
+p3 <- plot(stabSelectMARwR)
+gridExtra::grid.arrange(p1, p2, p3, ncol=1)
 ```
 
+### Fitting models
 
-```{r modelFitting}
-## Lasso 
+```{r lasso}
 lassoMCAR <- lasso(trainMCAR, testMCAR)
 lassoMAR <- lasso(trainMAR, testMAR)
 lassoDebiasMCAR <- lasso(trainMCAR, testMCAR, debiased = TRUE)
 lassoDebiasMAR <- lasso(trainMAR, testMAR, debiased = TRUE)
+```
 
-## Stability selection with coxph
+```{r Stability_selection_with_coxph}
 coxMCAR <- cox(trainMCAR, testMCAR, varSelectMCAR)
 coxMAR <- cox(trainMAR, testMAR, varSelectMAR)
+```
 
-## Gradient boosting
-gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
-gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+```{r Gradient_boosting, warning=FALSE}
+gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
+gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
+```
 
-## Gradient boosting with stability selection
-gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
-gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = TRUE)
+```{r Gradient_boosting_with_stability_selection, warning=FALSE}
+gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
+gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
+```
 
-## Survival forests
+```{r Survival_forests}
 forestMCAR <- survForest(trainMCAR, testMCAR)
 forestMAR <- survForest(trainMAR, testMAR)
+```
 
-## Survival forests with stability selection
+```{r Survival_forests_stability_selection}
 forestStabMCAR <- survForest(trainMCAR, testMCAR, varNames = varSelectMCAR)
 forestStabMAR <- survForest(trainMAR, testMAR, varNames = varSelectMAR)
+```
 
-## Gam 
+```{r GAM}
 gamMCAR <- gamPred(trainMCAR, testMCAR, varNames = varSelectMCAR, conVarCT, disVarCT) 
 gamMAR <- gamPred(trainMAR, testMAR, varNames = varSelectMAR, conVarCT, disVarCT)
 ```
 
+### Scoring models
 
 ```{r scoring}
-## Lasso
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoMAR)
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoDebiasMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoDebiasMAR)
-
-## Cox
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, coxMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, coxMAR)
-
-## Gradient boosting
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbMAR)
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbStabMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbStabMAR)
-
-## Forests
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestMAR)
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestStabMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestStabMAR)
-
-## Gam
-score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gamMCAR)
-score_q1a(testMAR$LKADT_P, testMAR$DEATH, gamMAR)
+options(digits=3, width=100)
+scores <- data.frame(
+  ## Lasso
+  lassoMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoMCAR)),
+  lassoMar = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoMAR)),
+  lassoDebiasMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, lassoDebiasMCAR)),
+  lassoDebiasMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, lassoDebiasMAR)),
+  ## Cox
+  coxMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, coxMCAR)),
+  coxMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, coxMAR)),
+  ## Gradient boosting
+  gbMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbMCAR)),
+  gbMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbMAR)),
+  gbStabMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gbStabMCAR)),
+  gbStabMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, gbStabMAR)),
+  ## Forests
+  forestMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestMCAR)),
+  forestMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestMAR)),
+  forestStabMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, forestStabMCAR)),
+  forestStabMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, forestStabMAR)),
+  ## Gam
+  gamMCAR = unlist(score_q1a(testMCAR$LKADT_P, testMCAR$DEATH, gamMCAR)),
+  gamMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, gamMAR))
+)
+scores <- t(as.matrix(scores[, order(scores["iAUC", ], decreasing = TRUE)]))
+scores
+options(digits=7, width=80)
 ```
 
