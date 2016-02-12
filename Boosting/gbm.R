@@ -16,30 +16,33 @@ library(glmnet)
 library(gbm)
 
 
-gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
+gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, verbose = FALSE){
   
-  # fit a Cox LASSO
-  cox.mm <- model.matrix(~ . - 1, data = 
-                           train[,setdiff(names(train), c("LKADT_P", "DEATH"))])
-  cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
-                      family = "cox")
-  
-  coefs <- coef(cox.cv, s = "lambda.min")
-  act.index <- which(coefs != 0)
-
-  # select the active variables to be fitted in the gbmsci
-  var.index <- unique(attributes(cox.mm)$assign[act.index])
-  xx.v <- (train[,setdiff(names(train), c("LKADT_P", "DEATH"))])[, var.index]
-  
+  if(is.null(varNames)) {
+    # Variable selection as Søren did it. 
+    # The 'varNames' argument can be specified instead.
+    # fit a Cox LASSO
+    predVar <- setdiff(names(train), c("LKADT_P", "DEATH"))
+    cox.mm <- model.matrix(~ . - 1, data = train[, predVar])
+    cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
+                        family = "cox")
+    
+    coefs <- coef(cox.cv, s = "lambda.min")
+    act.index <- which(coefs != 0)
+    
+    # select the active variables to be fitted in the gbmsci
+    var.index <- unique(attributes(cox.mm)$assign[act.index])
+    varNames <- predVar[var.index]
+  }
   
   gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
-                                 paste(names(xx.v), collapse = " + "), 
-                                 collapse = "")) 
+                                 paste(varNames, collapse = " + "), 
+                                 collapse = ""))
   
   
   gbm.o <- gbm(gbm.form, data = train,
                weights = rep(1, nrow(train)),
-               var.monotone = rep(0, ncol(xx.v)),
+               var.monotone = rep(0, length(varNames)),
                distribution = "sci",
                n.trees = ntrees,
                shrinkage = shrinkage,
@@ -49,10 +52,9 @@ gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
                cv.folds = 5,
                n.minobsinnode = 10,
                keep.data = TRUE,
-               verbose = FALSE)
+               verbose = verbose)
   
-  best.iter <- gbm.perf(gbm.o, method = "cv")
-  -predict(gbm.o, test, best.iter)
-  
+  best.iter <- gbm.perf(gbm.o, plot.it = FALSE, method = "cv")
+  - predict(gbm.o, test, best.iter)
 }
 
