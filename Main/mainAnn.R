@@ -1,0 +1,775 @@
+---
+  title: "Prostate Cancer DREAM Challenge - Main Document"
+author: "Ann-Sophie Buchardt"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+  fig_height: 4
+fig_width: 10
+theme: flatly
+---
+  
+  # Data Management
+  
+  ```{r Preamble, eval=FALSE}
+rm(list=ls())
+gc()
+
+library(survival)
+library(mice)
+library(glmnet)
+library(gbm)
+library(randomForestSRC)
+library(ggplot2)
+library(survival)
+library(mgcv)
+library(timeROC)
+library(Bolstad2)
+```
+
+```{r Data, eval=FALSE}
+setwd("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Data/")
+temp <- list.files(pattern="*.csv")
+allData <- lapply(temp, function(x) read.delim(file = x, header = TRUE, sep = ",",
+                                               na.strings = c(" ", "", "."),
+                                               stringsAsFactors=FALSE))
+setwd("/home/ann-sophie/Documents/studstat/ProjectInStatistics/Dream")
+
+CoreTableDict <- allData[[1]]
+CoreTable <- allData[[2]]
+```
+
+```{r DataManipulation, eval=FALSE}
+# Anne's data manipulation
+discard <-  c("HGTBLCAT", "WGTBLCAT", "HEAD_AND_NECK", 
+              "PANCREAS", "THYROID", "CREACLCA", "CREACL", 
+              "GLEAS_DX", "STOMACH")
+CoreTable <- subset(CoreTable, select = -which(colnames(CoreTable) %in% discard))
+
+CoreTable <- transform(CoreTable, 
+                       PSA = ifelse(PSA == 0, 0.01, PSA),
+                       ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
+
+for (i in seq_len(ncol(CoreTable))) {
+  if (is.factor(CoreTable[, i])) {
+    tmp <- as.character(CoreTable[, i])
+    tmp[tmp == ""] <- "No"
+    CoreTable[, i] <- factor(tmp)
+  }
+}
+
+# classFrame
+logPreds <- c("CREAT", "LDH", "NEU", "PSA", "WBC", "CREACL", 
+              "MG", "BUN", "CCRC")
+catPreds <- c("RACE_C", "REGION_C", "ECOG_C", "STUDYID",
+              "AGEGRP2", "SMOKE", "SMOKFREQ", "AGEGRP")
+binPreds <- names(CoreTable)[50:122]
+
+classFrame <- data.frame(names=names(CoreTable), 
+                         modeltype=factor(rep("linear",
+                                              ncol(CoreTable)),
+                                          levels=c("linear",
+                                                   "factor",
+                                                   "binary")),
+                         transform=factor(rep("id", ncol(CoreTable)),
+                                          levels=c("id", "log")))
+
+for (i in 1:length(logPreds)) {
+  classFrame[classFrame$names==logPreds[i], "transform"] <- "log"
+}
+for (i in 1:length(catPreds)) {
+  classFrame[classFrame$names==catPreds[i], "modeltype"] <- "factor"
+}
+for (i in 1:length(binPreds)) {
+  classFrame[classFrame$names==binPreds[i], "modeltype"] <- "binary"
+}
+
+# More data manipulation...
+tmp <- na.omit(CoreTableDict$Var.Name[substring(CoreTableDict$Comment, 1, 1) == "Y" & CoreTableDict$Var.Name %in% names(CoreTable)])
+CoreTable[tmp][is.na(CoreTable[tmp])] <- "NO"
+CoreTable$DEATH[is.na(CoreTable$DEATH)] <- "NO"
+CoreTable$RACE_C[CoreTable$RACE_C == "Missing"] <- NA
+CoreTable$REGION_C[CoreTable$REGION_C == "MISSING"] <- NA
+
+missingAllCT <- names(CoreTable[apply(CoreTable, 2, 
+                                      function(x) sum(is.na(x))) == nrow(CoreTable)])
+varLevels <- sapply(CoreTable, function(x) length(unique(x)))
+oneVarLevel <- names(varLevels[varLevels == 1])
+tt <- aggregate(x = CoreTable, by = list(CoreTable$STUDYID), function(x) {
+  ifelse(sum(!duplicated(x)) == 1, NA, sum(!duplicated(x)))
+})
+nas <- colSums(is.na(tt))
+notAllStudies <- names(CoreTable)[!(names(CoreTable) %in% names(nas[nas == 0]))]
+notTwoStudies <- names(CoreTable)[!(names(CoreTable) %in% names(nas[nas %in% 0:1]))]
+discardedVars <- c(missingAllCT, oneVarLevel, notTwoStudies,
+                   "DISCONT", "ENTRT_PC", "ENDTRS_C", "AGEGRP", 
+                   "TRT1_ID", "TRT2_ID", "TRT3_ID"
+)  
+CoreTable <- subset(CoreTable, 
+                    select = c(names(CoreTable)[!(names(CoreTable) %in% discardedVars)],
+                               "STUDYID"))
+
+conVarCT <- CoreTableDict$Var.Name[CoreTableDict$Type == "NUM" & CoreTableDict$Var.Name %in% names(CoreTable)]
+conVarCT <- conVarCT[conVarCT != "NA"]
+disVarCT <- CoreTableDict$Var.Name[CoreTableDict$Type == "CHAR" & CoreTableDict$Var.Name %in% names(CoreTable)]
+
+for(i in 1:length(conVarCT)){
+  CoreTable[,conVarCT[i]] <- as.numeric(as.character(CoreTable[,conVarCT[i]]))
+}
+for(i in 1:length(disVarCT)){
+  CoreTable[,disVarCT[i]] <- factor(CoreTable[,disVarCT[i]])
+}
+
+for(i in 1:length(disVarCT)) {
+  if(nlevels(CoreTable[,disVarCT[i]]) == 2) {
+    levels(CoreTable[,disVarCT[i]]) <- ifelse(levels(CoreTable[,disVarCT[i]]) == c("NO", "Y"), 
+                                              c("NO", "YES"), 
+                                              levels(CoreTable[,disVarCT[i]]))
+  }
+}
+
+CoreTable$DEATH <- ifelse(CoreTable$DEATH == "NO", 0, 1)
+```
+
+# Imputation
+
+## Function
+
+```{r AnnesImputationFunctions, eval=FALSE}
+#Function that finds the "num.preds" strongest marginal predictors
+#for a given variable ("response") using all variables in the 
+#dataset that have at least "min.obs.num" non-missing observations
+#and whose names are not included in the "avoid" vector.
+predsForm <- function(data=CoreTable, 
+                      avoid=NULL,
+                      response, alpha=0.05, transform="id",
+                      num.preds=1, modeltype="linear",
+                      min.obs.num=0,
+                      print.mode=FALSE) {
+  avoid <- c(response, avoid)
+  predictors <- subset(data, select=!(names(data) %in% avoid))
+  n.predictors <- ncol(predictors)
+  use.names <- c("dropme")
+  use.ps <- numeric(0)
+  for (i in 1:n.predictors) {
+    working.vars <- na.omit(cbind(data[,response],predictors[,i]))
+    if (nrow(na.omit(working.vars)) > 0 & 
+        length(levels(factor(working.vars[,2]))) > 1 ) {
+      if (transform=="id") {
+        if (modeltype=="linear") {
+          model <- lm(data[,response] ~ predictors[,i])
+          testtype <- "F"
+        }
+        if (modeltype=="binary") {
+          model <- glm(data[,response] ~ predictors[,i], 
+                       family=binomial)
+          testtype <- "LRT"
+        }
+      }
+      if (transform=="log") {
+        model <- lm(log(data[,response]+0.1) ~ predictors[,i], 
+                    subset=!is.na(data[,response]))
+        testtype <- "F"
+      }
+      p <- anova(model, test=testtype)["predictors[, i]",5]
+      if (p <=alpha) {
+        use.names <- c(use.names, names(predictors)[i])
+        use.ps <- c(use.ps, p)
+      }
+    }
+  }
+  use.names <- use.names[-1]
+  use.frame <- data.frame(use.names, use.ps)
+  use.frame <- use.frame[order(use.frame$use.ps),]
+  
+  if (length(use.names) <= num.preds) {
+    max.preds=length(use.names)
+  } else {max.preds <- num.preds}
+  
+  if (length(use.names) >= 1) {
+    use.us <- c("dropme")
+    pred.num <- 0
+    firstname <- use.frame$use.names[1]
+    data.use <- data[, "LKADT_P"] #arbitrary variable with no NAs
+    i <- 1
+    still.vars.left <- TRUE
+    while (pred.num < max.preds & still.vars.left) {
+      name <- as.character(use.frame$use.names[i])
+      data.use.maybe <- cbind(data.use, data[,name])
+      
+      if (nrow(na.omit(data.use.maybe)) >= min.obs.num) {
+        use.us <- c(use.us,name)
+        data.use <- data.use.maybe
+        pred.num <- pred.num + 1
+      }
+      i <- i+1
+      if (i == length(use.names)) {
+        still.vars.left <- FALSE
+      } 
+      num.preds <- length(use.us)-1
+    }
+    use.us <- use.us[-1]
+  } else {use.us <- c("1")}
+  if (length(use.us)==0) {use.us <- c("1")}
+  if (transform=="log") {
+    resp.str <- paste("log(", response, "+0.1) ~ ", sep="")
+  } else {
+    resp.str <- paste(response, "~", " ")
+  }
+  returnform <- as.formula(paste(resp.str, 
+                                 paste(use.us, collapse="+")))  
+  returnform
+}
+
+
+#Function that takes a formula object and, if "useResp"=T,
+#adds the Nelson-Aalen estimate of the cumulative hazard and 
+#the status indicator from the provided "survobject" as 
+#predictors, fits a model and returns the variable to be 
+#imputed with predicted values from that model in every 
+#NA occurence.
+MARimp <- function(data, modeltype="linear", 
+                   survobject=Surv(CoreTable$LKADT_P, 
+                                   CoreTable$DEATH==1),#"YES"),
+                   form, transform="id", key="RPT",
+                   useResp=T) {
+  imp.varname <- as.character(form)[2]
+  if (substr(imp.varname, 1,4)=="log(") {
+    imp.varname <- substr(imp.varname, 5, nchar(imp.varname)-7)
+  }
+  
+  if (useResp) {
+    time <- survobject[, "time"]
+    status <- survobject[, "status"]
+    data <- cbind(data, time, status)
+    #Compute Nelson-Aalen estimate of cumulative hazard
+    H.hat <- nelsonaalen(data=data, time=time, status=status)
+    data <- cbind(data, H.hat)
+    form <- update(form, ~. + status + H.hat)
+  }
+  #Linear regression 
+  if (modeltype=="linear") {
+    model <- lm(form, data=data)
+    estimates <- predict(model, newdata=data)
+    #Log-transformation
+    if (transform=="log") {
+      returnvar <- exp(estimates)-0.1    
+    }
+  }
+  #Binary regression/classification
+  if (modeltype=="binary") {
+    data[, imp.varname] <- factor(data[, imp.varname])
+    imp.var.levels <- levels(factor(data[,imp.varname]))
+    ref.level <- imp.var.levels[1]
+    data[,imp.varname] <- relevel(data[, imp.varname], ref=ref.level)
+    model <- glm(form, data=data, family=binomial)
+    estimates <- predict(model, newdata=data, type="response")
+    for (i in 1:length(estimates)) {
+      if (!is.na(estimates[i])) {
+        if (estimates[i]<0.5) {
+          estimates[i] <- ref.level
+        } else if (estimates[i]>=0.5) { 
+          estimates[i] <- imp.var.levels[2]
+        }
+      }
+    }
+    estimates <- factor(estimates)
+  }
+  is.missing <- data[is.na(data[, imp.varname]), key]
+  returnvars <- data[, c(imp.varname, key)]
+  returnvars[returnvars[,key] %in% is.missing, 
+             imp.varname] <- estimates[returnvars[,key] %in%
+                                         is.missing]
+  returnvar <- returnvars[, imp.varname]
+  returnvar
+}
+
+
+#Function that does MCAR imputation for the "impvar" variable
+MCARimp <- function(data, impvar) {
+  n <- nrow(data)
+  outvar <- data[, impvar]
+  impvar_noNA <- outvar[!is.na(outvar)]
+  n_noNA <- length(impvar_noNA)
+  ind <-  sample(1:n_noNA, n-n_noNA, replace=T)
+  outvar[is.na(outvar)] <- impvar_noNA[ind]
+  outvar
+}
+
+#Wrapper function that performs imputation
+imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
+                min.obs.num=nrow(data), num.preds=NULL,
+                survobject=Surv(CoreTable$LKADT_P,
+                                CoreTable$DEATH==1),#"YES"),
+                key="RPT", impType, avoid) {
+  dataout <- data
+  nImp <- length(impvars)
+  if (impType == "MCAR") {
+    for (i in 1:nImp) {
+      outvar <- impvars[i]
+      dataout[, outvar] <- MCARimp(data, outvar)
+    }
+  }
+  if (impType == "MARresp" | impType=="MAR") {
+    useResp <- F
+    if (impType=="MARresp") useResp <- T 
+    for (i in 1:nImp) {
+      outvar <- impvars[i]
+      modeltype <- classFrame[classFrame$names==outvar, "modeltype"]
+      if (modeltype=="factor") {
+        dataout[, outvar] <- MCARimp(data, outvar)
+      } else {
+        transform <- classFrame[classFrame$names==outvar, "transform"]
+        form <- predsForm(data, avoid=avoid, outvar,
+                          alpha, transform, num.preds, 
+                          modeltype, min.obs.num)
+        dataout[, outvar] <- MARimp(data, modeltype, 
+                                    survobject, form,
+                                    transform, key,
+                                    useResp=useResp)
+      }
+    }
+  }
+  dataout
+}
+```
+
+## Test/Training Data
+
+```{r TestTraing, eval=FALSE}
+set.seed(5)
+subC <- subset(CoreTable, select = which(!(names(CoreTable) %in% c("RPT", "STUDYID"))))
+train_idx <- sample(1:nrow(subC), floor(0.8 * nrow(subC)), replace = FALSE)
+trainTemp <- CoreTable[train_idx,] 
+testTemp <- CoreTable[-train_idx,] 
+```
+
+## Impute
+
+```{r ImputationSetup, eval=FALSE}
+nonPreds <- c("DOMAIN", "RPT", "LKADT_P", "DEATH", "DISCONT",
+              "ENDTRS_C", "ENTRT_PC", "PER_REF", "LKADT_REF",
+              "LKADT_PER")
+allVars <- names(CoreTable)
+impute <- rep(NA, ncol(CoreTable)) 
+for (i in 1:ncol(CoreTable)) {
+  impute[i] <- any(is.na(CoreTable[,i]))
+}
+impute <- allVars[impute]
+impute <- impute[!(impute %in% nonPreds)]
+```
+
+```{r x7imputations, eval=FALSE}
+cF <- classFrame[classFrame$names %in% impute, ]
+
+trainDataMCAR <- imp(trainTemp, impute, impType="MCAR")
+testDataMCAR <- imp(testTemp, impute, impType="MCAR")
+
+trainDataMAR <- imp(trainTemp, impute, cF,
+                    alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
+                    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+testDataMAR <- imp(testTemp, impute, cF,
+                   alpha=0.05, min.obs.num=nrow(testTemp), num.preds=5,
+                   key="RPT", impType="MAR", avoid=c(nonPreds, catPreds))
+
+trainDataMARwR <- imp(trainTemp, impute, cF,
+                      alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
+                      survobject=Surv(trainTemp$LKADT_P, trainTemp$DEATH==1),
+                      key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))
+```
+
+# Gradient Boosting
+
+## Function
+
+```{r SorensBoostingFunction, eval=FALSE}
+gradBM <- function(train, test, ntrees = 1000, shrinkage = 1){
+  
+  # fit a Cox LASSO
+  cox.mm <- model.matrix(~ . - 1, data = 
+                           train[,setdiff(names(train), c("LKADT_P", "DEATH"))])
+  cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
+                      family = "cox")
+  
+  coefs <- coef(cox.cv, s = "lambda.min")
+  act.index <- which(coefs != 0)
+  
+  # select the active variables to be fitted in the gbmsci
+  var.index <- unique(attributes(cox.mm)$assign[act.index])
+  xx.v <- (train[,setdiff(names(train), c("LKADT_P", "DEATH"))])[, var.index]
+  
+  
+  gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
+                               paste(names(xx.v), collapse = " + "), 
+                               collapse = "")) 
+  
+  
+  gbm.o <- gbm(gbm.form, data = train,
+               weights = rep(1, nrow(train)),
+               var.monotone = rep(0, ncol(xx.v)),
+               distribution = "sci",
+               n.trees = ntrees,
+               shrinkage = shrinkage,
+               interaction.depth = 3,
+               bag.fraction = 0.5,
+               train.fraction = 1,
+               cv.folds = 5,
+               n.minobsinnode = 10,
+               keep.data = TRUE,
+               verbose = FALSE)
+  
+  best.iter <- gbm.perf(gbm.o, method = "cv")
+  -predict(gbm.o, test, best.iter)
+  
+}
+```
+
+## Boost
+
+```{r gradientBoosting, eval=FALSE}
+gradBoostMCAR <- gradBM(trainDataMCAR, testDataMCAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMAR <- gradBM(trainDataMAR, testDataMAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMARwR1 <- gradBM(trainDataMARwR, testDataMCAR, ntrees = 1000, shrinkage = 1)
+
+gradBoostMARwR2 <- gradBM(trainDataMARwR, testDataMAR, ntrees = 1000, shrinkage = 1)
+```
+
+## iAUC
+
+```{r MCARiAUCboosting, eval=FALSE}
+# MCAR
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(gradBoostMCAR, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCgradBoostMCAR <- with(valiData, timeROC(T=LKADT_P,
+                                           delta=DEATH,
+                                           marker=.fitted,
+                                           cause=1,
+                                           weighting="cox",
+                                           times=times,
+                                           iid = FALSE)$AUC)
+iAUCgradBoostMCAR <- sintegral(times, AUCgradBoostMCAR)$int / (max(times) - min(times))
+iAUCgradBoostMCAR
+# MAR
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(gradBoostMAR, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCgradBoostMAR <- with(valiData, timeROC(T=LKADT_P,
+                                          delta=DEATH,
+                                          marker=.fitted,
+                                          cause=1,
+                                          weighting="cox",
+                                          times=times,
+                                          iid = FALSE)$AUC)
+iAUCgradBoostMAR <- sintegral(times, AUCgradBoostMAR)$int / (max(times) - min(times))
+iAUCgradBoostMAR
+# MARwR1
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMARwR1[, which(names(testDataMARwR1) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(gradBoostMARwR1, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCgradBoostMARwR1 <- with(valiData, timeROC(T=LKADT_P,
+                                             delta=DEATH,
+                                             MARwR1ker=.fitted,
+                                             cause=1,
+                                             weighting="cox",
+                                             times=times,
+                                             iid = FALSE)$AUC)
+iAUCgradBoostMARwR1 <- sintegral(times, AUCgradBoostMARwR1)$int / (max(times) - min(times))
+iAUCgradBoostMARwR1
+# MARwR2
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMARwR2[, which(names(testDataMARwR2) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(gradBoostMARwR2, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCgradBoostMARwR2 <- with(valiData, timeROC(T=LKADT_P,
+                                             delta=DEATH,
+                                             MARwR2ker=.fitted,
+                                             cause=1,
+                                             weighting="cox",
+                                             times=times,
+                                             iid = FALSE)$AUC)
+iAUCgradBoostMARwR2 <- sintegral(times, AUCgradBoostMARwR2)$int / (max(times) - min(times))
+iAUCgradBoostMARwR2
+```
+
+# Random Forest for Survival
+
+## Function
+
+```{r sorensRandomForestFunction, eval=FALSE}
+survForest <- function(train, test) {
+  
+  rf.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
+                              paste(setdiff(names(train), c("LKADT_P", "DEATH")), 
+                                    collapse = " + "), 
+                              collapse = ""))
+  
+  rf.o <- rfsrc(rf.form, data = train,
+                mtry = 20, nsplit = 10, nodesize = 6)
+  predict(rf.o, newdata = test)$predicted
+  
+}
+```
+
+## Forest
+
+```{r randomForest, eval=FALSE}
+randomForestMCAR <- survForest(trainDataMCAR, testDataMCAR)
+
+randomForestMAR <- survForest(trainDataMAR, testDataMAR)
+
+randomForestMARwR1 <- survForest(trainDataMARwR, testDataMCAR)
+
+randomForestMARwR2 <- survForest(trainDataMARwR, testDataMAR)
+```
+
+## iAUC
+
+```{r randomForestAUC, eval=FALSE}
+# MCAR
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(randomForestMCAR, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCrandomForestMCAR <- with(valiData, timeROC(T=LKADT_P,
+                                              delta=DEATH,
+                                              marker=.fitted,
+                                              cause=1,
+                                              weighting="cox",
+                                              times=times,
+                                              iid = FALSE)$AUC)
+iAUCrandomForestMCAR <- sintegral(times, AUCrandomForestMCAR)$int / (max(times) - min(times))
+iAUCrandomForestMCAR
+# MAR
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(randomForestMAR, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCrandomForestMAR <- with(valiData, timeROC(T=LKADT_P,
+                                             delta=DEATH,
+                                             marker=.fitted,
+                                             cause=1,
+                                             weighting="cox",
+                                             times=times,
+                                             iid = FALSE)$AUC)
+iAUCrandomForestMAR <- sintegral(times, AUCrandomForestMAR)$int / (max(times) - min(times))
+iAUCrandomForestMAR
+# MARwR1
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMARwR1[, which(names(testDataMARwR1) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(randomForestMARwR1, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCrandomForestMARwR1 <- with(valiData, timeROC(T=LKADT_P,
+                                                delta=DEATH,
+                                                marker=.fitted,
+                                                cause=1,
+                                                weighting="cox",
+                                                times=times,
+                                                iid = FALSE)$AUC)
+iAUCrandomForestMARwR1 <- sintegral(times, AUCrandomForestMARwR1)$int / (max(times) - min(times))
+iAUCrandomForestMARwR1
+# MARwR2
+times <- seq(12,24,by=1) * 30.5
+tmpTest <- testDataMARwR2[, which(names(testDataMARwR2) %in% c("LKADT_P", "DEATH", covars))]
+subTest <- transform(na.omit(tmpTest), DEATH = ifelse(DEATH == "YES",1,0))
+
+valiData <- transform(subTest, 
+                      .fitted = predict(randomForestMARwR2, newdata = subTest, type = "lp"))
+
+d <- datadist(valiData)
+options(datadist="d") 
+AUCrandomForestMARwR2 <- with(valiData, timeROC(T=LKADT_P,
+                                                delta=DEATH,
+                                                marker=.fitted,
+                                                cause=1,
+                                                weighting="cox",
+                                                times=times,
+                                                iid = FALSE)$AUC)
+iAUCrandomForestMARwR2 <- sintegral(times, AUCrandomForestMARwR2)$int / (max(times) - min(times))
+iAUCrandomForestMARwR2
+```
+
+```{r gam, eval=FALSE}
+form <- LKADT_P ~ s(log(ALP)) + s(HB) + s(log(AST)) + s(log(PSA)) + s(ALB) +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES + ANALGESICS
+
+survGamMCAR <- gam(form, data = trainDataMCAR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMCAR)
+survGamMCAR <- update(survGamMCAR, . ~ . - ANALGESICS - s(ALB))
+
+survGamMAR <- gam(form, data = trainDataMAR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMAR)
+survGamMAR <- update(survGamMAR, . ~ . - ANALGESICS - s(ALB))
+
+survGamMARwR <- gam(form, data = trainDataMARwR, family = cox.ph(), weight = DEATH == 1)
+summary(survGamMARwR)
+survGamMARwR <- update(survGamMARwR, . ~ . - ANALGESICS - LYMPH_NODES)
+```
+
+```{r gamAUC, eval=FALSE}
+times <- seq(12,24,by=1) * 30.5
+# MCAR
+covars <- c("ALP", "HB", "AST", "PSA", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+valiData <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMCAR <- with(valiData, timeROC(T=LKADT_P, 
+                                     delta=DEATH,
+                                     marker=predict.gam(survGamMCAR,valiData,type="link"),
+                                     cause=1,
+                                     weighting="marginal",
+                                     times=times,
+                                     iid=FALSE)$AUC)
+iAUCgamMCAR <- sintegral(times, AUCgamMCAR)$int / (max(times) - min(times))
+iAUCgamMCAR
+# MAR
+covars <- c("ALP", "HB", "AST", "PSA", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+valiData <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMAR <- with(valiData, timeROC(T=LKADT_P, 
+                                    delta=DEATH,
+                                    marker=predict.gam(survGamMAR,valiData,type="link"),
+                                    cause=1,
+                                    weighting="marginal",
+                                    times=times,
+                                    iid=FALSE)$AUC)
+iAUCgamMAR <- sintegral(times, AUCgamMAR)$int / (max(times) - min(times))
+iAUCgamMAR
+# MARwR1
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL")
+valiData <- testDataMCAR[, which(names(testDataMCAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMARwR1 <- with(valiData, timeROC(T=LKADT_P, 
+                                       delta=DEATH,
+                                       marker=predict.gam(survGamMARwR,valiData,type="link"),
+                                       cause=1,
+                                       weighting="marginal",
+                                       times=times,
+                                       iid=FALSE)$AUC)
+iAUCgamMARwR1 <- sintegral(times, AUCgamMARwR1)$int / (max(times) - min(times))
+iAUCgamMARwR1
+# MARwR2
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL")
+valiData <- testDataMAR[, which(names(testDataMAR) %in% c("LKADT_P", "DEATH", covars))]
+AUCgamMARwR2 <- with(valiData, timeROC(T=LKADT_P, 
+                                       delta=DEATH,
+                                       marker=predict.gam(survGamMARwR,valiData,type="link"),
+                                       cause=1,
+                                       weighting="marginal",
+                                       times=times,
+                                       iid=FALSE)$AUC)
+iAUCgamMARwR2 <- sintegral(times, AUCgamMARwR2)$int / (max(times) - min(times))
+iAUCgamMAR
+```
+
+```{r Cox}
+form <- Surv(LKADT_P,DEATH==1) ~ log(ALP) + HB + log(AST) + log(PSA) + ALB +
+  ECOG_C + LIVER + ADRENAL + LYMPH_NODES 
+
+coxMCAR <- coxph(form, data= trainDataMCAR)
+
+coxMAR <- coxph(form, data= trainDataMAR)
+
+coxMARwR <- coxph(form, data= trainDataMARwR)
+```
+
+```{r coxAUC}
+times <- seq(12,24,by=1) * 30.5
+covars <- c("ALP", "HB", "AST", "PSA", "ALB", "ECOG_C", "LIVER", "ADRENAL", "LYMPH_NODES")
+# MCAR
+tmpTest <- testDataMCAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMCAR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMCAR <- with(valiData, timeROC(T=time, 
+                                     delta=status,
+                                     marker=.fitted,
+                                     cause=1,
+                                     weighting="marginal",
+                                     times=times,
+                                     iid=FALSE)$AUC)
+iAUCcoxMCAR <- sintegral(times, AUCcoxMCAR)$int / (max(times) - min(times))
+iAUCcoxMCAR
+# MAR
+tmpTest <- testDataMAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMAR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMAR <- with(valiData, timeROC(T=time, 
+                                    delta=status,
+                                    marker=.fitted,
+                                    cause=1,
+                                    weighting="marginal",
+                                    times=times,
+                                    iid=FALSE)$AUC)
+iAUCcoxMAR <- sintegral(times, AUCcoxMAR)$int / (max(times) - min(times))
+iAUCcoxMAR
+# MARwR1
+tmpTest <- testDataMCAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMARwR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMARwR1 <- with(valiData, timeROC(T=time, 
+                                       delta=status,
+                                       marker=.fitted,
+                                       cause=1,
+                                       weighting="marginal",
+                                       times=times,
+                                       iid=FALSE)$AUC)
+iAUCcoxMARwR1 <- sintegral(times, AUCcoxMARwR1)$int / (max(times) - min(times))
+iAUCcoxMARwR1
+# MARwR2
+tmpTest <- testDataMAR[, c("DEATH", covars)]
+valiData <- transform(subTest, .fitted = predict(coxMARwR, newdata = tmpTest, type = "lp"))
+
+AUCcoxMARwR2 <- with(valiData, timeROC(T=time, 
+                                       delta=status,
+                                       marker=.fitted,
+                                       cause=1,
+                                       weighting="marginal",
+                                       times=times,
+                                       iid=FALSE)$AUC)
+iAUCcoxMARwR2 <- sintegral(times, AUCcoxMARwR2)$int / (max(times) - min(times))
+iAUCcoxMARwR2
+```
+
+```{r iaucTable}
+iaucTab <- cbind(rep("-", 4),
+                 rep("-", 4),
+                 c(iAUCcoxMCAR, iAUCcoxMAR, iAUCcoxMARwR1, iAUCcoxMARwR2),
+                 c(iAUCgamMCAR, iAUCgamMAR, iAUCgamMARwR1, iAUCgamMARwR2)) 
+print(iaucTab, type = "html")
+```
