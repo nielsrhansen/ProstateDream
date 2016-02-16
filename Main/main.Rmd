@@ -15,12 +15,12 @@ source("../SynapseScripts/score.R")
 source("../Gam/gam.R")
 source("../StabilitySelection/stabSelect.R")
 
-#source("Boosting/gbm.R")
-#source("SurvivalForests/survForests.R")
-#source("Imputation/imputation.R")
-#source("SynapseScripts/score.R")
-#source("Gam/gam.R")
-#source("StabilitySelection/stabSelect.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Boosting/gbm.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/SurvivalForests/survForests.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Imputation/imputation.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/SynapseScripts/score.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Gam/gam.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/StabilitySelection/stabSelect.R")
 
 ```
 
@@ -32,9 +32,9 @@ CoreTableDict <- read.table(file = "../Data/DataDictionary.csv",
                             na.strings = c(" ", "", "."),
                             stringsAsFactors = FALSE)
 
-#load("Data/Prostate_all.RData")
+#load("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Data/Prostate_all.RData")
 #training <- CoreTable_training
-#CoreTableDict <- read.table(file = "Data/DataDictionary.csv", 
+#CoreTableDict <- read.table(file = "C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Data/DataDictionary.csv", 
 #                            header = TRUE, sep = ";",
 #                            na.strings = c(" ", "", "."),
 #                            stringsAsFactors = FALSE)
