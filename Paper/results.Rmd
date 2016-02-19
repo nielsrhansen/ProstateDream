@@ -1,0 +1,127 @@
+---
+title: "Results"
+author: "Søren Wengel Mogensen"
+date: "16 February 2016"
+output: html_document
+---
+
+
+```{r}
+library(xtable)
+library(ggplot2)
+library(reshape2)
+load("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Main/mainResults")
+```
+
+### CV folds, ordered by iAUC
+
+```{r cvfolds, echo = FALSE}
+for (i in 1:length(res_list)) {
+  colnames(res_list[[i]]) <- substr(colnames(res_list[[i]]), 1, 6)
+  print(paste("CV fold", i))
+  print(res_list[[i]], digits = 3)
+}
+```
+
+### Average Performance (over CV folds)
+
+```{r average1, echo = FALSE}
+# re-order alphabetically to take averages
+for (i in 1:length(res_list)) {
+  res_list[[i]] <- (res_list[[i]])[order(rownames(res_list[[i]])), ]
+}
+
+addFunc <- function(x, ...) {
+  ll <- list(...)
+  for (i in 1:length(ll)) x <- x + ll[[i]]
+  x
+  }
+
+ave_res <- do.call(addFunc, res_list)/length(res_list)
+```
+
+
+```{r average2, echo = FALSE}
+spli <- unlist(strsplit(rownames(ave_res), split = "M"))
+meth <- spli[seq_along(spli) %% 2 == 1]
+impmeth <- paste("M", spli[seq_along(spli) %% 2 == 0], sep = "")
+impmeth[impmeth == "Mar"] <- "MAR"
+
+ave_df <- data.frame(Method = meth, Imputation = impmeth, ave_res)
+```
+
+```{r average3, results = "asis", echo = FALSE}
+print(xtable(ave_df, digits = 3), type = "html", include.rownames = FALSE)
+```
+
+
+### Subtables for each criterion
+
+```{r iAUCtable1, echo = FALSE}
+# function for making a "two-sided" results table with only one criterion
+
+subTable <- function(crit, dd = ave_df){
+  
+ss <- ave_df[ ,c("Method", "Imputation", crit)]
+ssWide <- reshape(ss, v.names = crit, idvar = "Imputation",
+                    timevar = "Method", direction = "wide")
+rownames(ssWide) <- NULL
+print(xtable(ssWide, digits = 3), type = "html", include.rownames = FALSE)
+}
+
+```
+
+```{r iAUCtable2, results = "asis", echo = FALSE}
+for (i in seq(ncol(ave_df) - 2)) { 
+  print(names(ave_df)[i+2])
+  subTable(crit = names(ave_df)[i+2])
+}
+```
+
+### Average plot
+
+Plot of the average results (over the CV folds) for each criterion, method and imputation method.
+
+```{r resPlot1, echo = FALSE}
+names(ave_df) <- substr(names(ave_df), 1, 6)
+dd <- melt(ave_df, id.vars = c("Method", "Imputa"))
+ggplot(dd, aes(x = variable, y = value, fill = Method)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_grid( ~ Imputa) + coord_cartesian(ylim=c(.5, 0.8)) + 
+  xlab(NULL) +
+  theme(legend.position = "bottom")
+```
+
+Same plot as above, imputation and method have just switched roles to facilitate comparison between imputation methods.
+
+```{r resPlot2, echo = FALSE}
+ggplot(dd, aes(x = variable, y = value, fill = Imputa)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_grid( ~ Method) + coord_cartesian(ylim=c(.5, 0.8)) + 
+  xlab(NULL) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
+```
+
+### iAUC for each fold
+
+Plot of iAUC for each fold, method and imputation.
+
+```{r foldPlot, echo = FALSE}
+dd <- ave_df[ ,c(1,2)]
+if (!identical(rownames(dd), rownames(res_list[[1]]))) 
+  warning("Rows do not match, review code.")
+for (i in 1:length(res_list)){
+  dd[ ,i+2] <- res_list[[i]][ ,5]
+}
+
+names(dd) <- c("Method", "Imputation", paste("Fold", seq_along(res_list)))
+
+dd <- melt(dd, id.vars = c("Method", "Imputation"))
+ggplot(dd, aes(x = variable, y = value, fill = Method)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_grid( ~ Imputation) + coord_cartesian(ylim=c(.5, 0.8)) +
+  ylab("iAUC") + xlab(NULL) +
+  theme(legend.position = "bottom")
+```
+

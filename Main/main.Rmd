@@ -14,6 +14,14 @@ source("../Imputation/imputation.R")
 source("../SynapseScripts/score.R")
 source("../Gam/gam.R")
 source("../StabilitySelection/stabSelect.R")
+
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Boosting/gbm.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/SurvivalForests/survForests.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Imputation/imputation.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/SynapseScripts/score.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Gam/gam.R")
+#source("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/StabilitySelection/stabSelect.R")
+
 ```
 
 ```{r Data}
@@ -23,6 +31,13 @@ CoreTableDict <- read.table(file = "../Data/DataDictionary.csv",
                             header = TRUE, sep = ";",
                             na.strings = c(" ", "", "."),
                             stringsAsFactors = FALSE)
+
+#load("C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Data/Prostate_all.RData")
+#training <- CoreTable_training
+#CoreTableDict <- read.table(file = "C:/Users/swmo/Desktop/-/UCPH/DREAM/ProstateDream/Data/DataDictionary.csv", 
+#                            header = TRUE, sep = ";",
+#                            na.strings = c(" ", "", "."),
+#                            stringsAsFactors = FALSE)
 ```
 
 ### Data preparation
@@ -86,15 +101,32 @@ training$DEATH <- ifelse(training$DEATH == "NO", 0, 1)
 ### Splitting
 
 ```{r TestTraining}
-set.seed(10)
-train_idx <- sample(1:nrow(training), floor(0.8 * nrow(training)), replace = FALSE)
-trainTemp <- training[train_idx, ] 
-testTemp <- training[-train_idx, ] 
+# obsolete in the CV loop
+#set.seed(10)
+#train_idx <- sample(1:nrow(training), floor(0.8 * nrow(training)), replace = #FALSE)
+#trainTemp <- training[train_idx, ] 
+#testTemp <- training[-train_idx, ] 
 ```
 
+### CV loop
+
+```{r cvloop}
+set.seed(10)
+k <- 5 # number of CV folds
+samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
+               size = nrow(training), 
+               replace = FALSE)
+
+res_list <- list()
+
+for (i in 1:k){
+  
+  trainTemp <- training[samp != i, ]
+  testTemp <- training[samp == i, ]
+ 
 ### Imputations
 
-```{r classFrame}
+# r classFrame
 logPreds <- c("CREAT", "LDH", "NEU", "PSA", "WBC", "CREACL", 
               "MG", "BUN", "CCRC")
 catPreds <- c("RACE_C", "REGION_C", "ECOG_C", "STUDYID",
@@ -118,9 +150,8 @@ classFrame[classFrame$names %in% binPreds, "modeltype"] <- "binary"
 impute <- setdiff(
   names(training)[apply(is.na(training), 2, any)],
   nonPreds)
-```
 
-```{r x7imputations}
+# r x7imputations
 cF <- subset(classFrame, names %in% impute)
 idInd <- which("RPT" == names(training))
 
@@ -139,68 +170,60 @@ trainMARwR <- imp(trainTemp, impute, cF,
                   alpha=0.05, min.obs.num=nrow(trainTemp), num.preds=5,
                   survobject=Surv(trainTemp$LKADT_P, trainTemp$DEATH==1),
                   key="RPT", impType="MARresp", avoid=c(nonPreds, catPreds))[, -idInd]
-```
 
 ### Stability selection
 
-```{r stabilitySelection}
+# r stabilitySelection
+
 stabSelectMCAR <- stabSelect(trainMCAR, trace = FALSE)
 stabSelectMAR <- stabSelect(trainMAR, trace = FALSE)
 stabSelectMARwR <- stabSelect(trainMARwR, trace = FALSE)
 varSelectMCAR <- as.character(with(stabSelectMCAR, var[freq > 0.5]))
 varSelectMAR <- as.character(with(stabSelectMAR, var[freq > 0.5]))
 varSelectMARwR <- as.character(with(stabSelectMARwR, var[freq > 0.5]))
-```
 
-```{r, fig.height=12}
+# r, fig.height=12
 p1 <- plot(stabSelectMCAR)
 p2 <- plot(stabSelectMAR)
 p3 <- plot(stabSelectMARwR)
 gridExtra::grid.arrange(p1, p2, p3, ncol=1)
-```
 
 ### Fitting models
 
-```{r lasso}
+# r lasso
 lassoMCAR <- lasso(trainMCAR, testMCAR)
 lassoMAR <- lasso(trainMAR, testMAR)
 lassoDebiasMCAR <- lasso(trainMCAR, testMCAR, debiased = TRUE)
 lassoDebiasMAR <- lasso(trainMAR, testMAR, debiased = TRUE)
-```
 
-```{r Stability_selection_with_coxph}
+# r Stability_selection_with_coxph
 coxMCAR <- cox(trainMCAR, testMCAR, varSelectMCAR)
 coxMAR <- cox(trainMAR, testMAR, varSelectMAR)
-```
 
-```{r Gradient_boosting, warning=FALSE}
+# r Gradient_boosting, warning=FALSE
 gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
 gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
-```
 
-```{r Gradient_boosting_with_stability_selection, warning=FALSE}
+# r Gradient_boosting_with_stability_selection, warning=FALSE
 gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
 gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = FALSE)
-```
 
-```{r Survival_forests}
+# r Survival_forests
 forestMCAR <- survForest(trainMCAR, testMCAR)
 forestMAR <- survForest(trainMAR, testMAR)
-```
 
-```{r Survival_forests_stability_selection}
+
+# r Survival_forests_stability_selection
 forestStabMCAR <- survForest(trainMCAR, testMCAR, varNames = varSelectMCAR)
 forestStabMAR <- survForest(trainMAR, testMAR, varNames = varSelectMAR)
-```
 
-```{r GAM}
+# r GAM
 gamMCAR <- gamPred(trainMCAR, testMCAR, varNames = varSelectMCAR, conVarCT, disVarCT) 
 gamMAR <- gamPred(trainMAR, testMAR, varNames = varSelectMAR, conVarCT, disVarCT)
-```
 
 ### Scoring models
 
-```{r scoring}
+# r scoring
 options(digits=3, width=100)
 scores <- data.frame(
   ## Lasso
@@ -226,7 +249,16 @@ scores <- data.frame(
   gamMAR = unlist(score_q1a(testMAR$LKADT_P, testMAR$DEATH, gamMAR))
 )
 scores <- t(as.matrix(scores[, order(scores["iAUC", ], decreasing = TRUE)]))
-scores
+
+res_list[[i]] <- scores
 options(digits=7, width=80)
+
+}
 ```
 
+
+### Results
+
+```{r results}
+save(res_list, file = "mainResults")
+```

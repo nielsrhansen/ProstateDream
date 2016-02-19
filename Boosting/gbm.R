@@ -17,12 +17,18 @@ library(gbm)
 
 
 gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, verbose = FALSE){
+
   
   if(is.null(varNames)) {
     # Variable selection as Søren did it. 
     # The 'varNames' argument can be specified instead.
     # fit a Cox LASSO
     predVar <- setdiff(names(train), c("LKADT_P", "DEATH"))
+    
+    # remove predictors that are constant
+    l.table <- apply(train[ ,predVar], 2, function(x) length(table(x)))
+    predVar <- predVar[l.table > 1]
+    
     cox.mm <- model.matrix(~ . - 1, data = train[, predVar])
     cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
                         family = "cox")
@@ -33,7 +39,14 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, v
     # select the active variables to be fitted in the gbmsci
     var.index <- unique(attributes(cox.mm)$assign[act.index])
     varNames <- predVar[var.index]
+  } else {
+    
+    # remove predictors that are constant
+    l.table <- apply(train[ ,varNames], 2, function(x) length(table(x)))
+    varNames <- varNames[l.table > 1]
+    
   }
+  
   
   gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
                                  paste(varNames, collapse = " + "), 
