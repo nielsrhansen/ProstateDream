@@ -18,5 +18,10 @@ survForest <- function(train, test, varNames = NULL) {
   
   rf.o <- rfsrc(rf.form, data = train,
                 mtry = 20, nsplit = 10, nodesize = 6)
-  predict(rf.o, newdata = test)$predicted
+  
+  pr <- rep(NA, nrow(test))
+  pr[complete.cases(test[,varNames])] <- predict(rf.o, 
+                                      newdata = test[complete.cases(test[,varNames]),])$predicted
+  pr
+  
 }

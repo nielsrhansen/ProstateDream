@@ -16,9 +16,17 @@ library(glmnet)
 library(gbm)
 
 
-gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, verbose = FALSE){
-
+gradBM <- function(train, test, varNames = NULL, ntrees = 1000, 
+                   shrinkage = 1, verbose = FALSE, full = FALSE){
   
+  if(full){
+    
+    varNames <- setdiff(names(train), c("LKADT_P", "DEATH"))
+    l.table <- apply(train[ ,varNames], 2, function(x) length(table(x)))
+    varNames <- varNames[l.table > 1]
+    
+  } else {
+
   if(is.null(varNames)) {
     # Variable selection as Søren did it. 
     # The 'varNames' argument can be specified instead.
@@ -46,6 +54,7 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, v
     varNames <- varNames[l.table > 1]
     
   }
+  }
   
   
   gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
@@ -68,6 +77,9 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000, shrinkage = 1, v
                verbose = verbose)
   
   best.iter <- gbm.perf(gbm.o, plot.it = FALSE, method = "cv")
-  - predict(gbm.o, test, best.iter)
+  pr <- rep(NA, nrow(test))
+  pr[complete.cases(test[,varNames])] <- predict(gbm.o, 
+                                      test[complete.cases(test[,varNames]),], best.iter)
+  -pr
 }
 

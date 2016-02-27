@@ -45,7 +45,6 @@ ave_res <- do.call(addFunc, res_list)/length(res_list)
 spli <- unlist(strsplit(rownames(ave_res), split = "M"))
 meth <- spli[seq_along(spli) %% 2 == 1]
 impmeth <- paste("M", spli[seq_along(spli) %% 2 == 0], sep = "")
-impmeth[impmeth == "Mar"] <- "MAR"
 
 ave_df <- data.frame(Method = meth, Imputation = impmeth, ave_res)
 ```

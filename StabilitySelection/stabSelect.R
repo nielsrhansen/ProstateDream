@@ -66,17 +66,26 @@ lasso <- function(train, test, debiased = FALSE) {
   predVar <- setdiff(colnames(train), c("LKADT_P", "DEATH"))  
   XX <- model.matrix(~ . - 1, train[, predVar])
   YY <- Surv(train$LKADT_P, train$DEATH)
-  XXpred <- model.matrix(~ . - 1, test[, predVar])
   survNet <- cv.glmnet(XX, YY, family = "cox")
   
+  coefs <- coefficients(survNet, s = "lambda.min") 
+  act.index <- which(coefs != 0)
+  var.index <- unique(attributes(XX)$assign[act.index])
+  varNames <- predVar[var.index]
+  
   if (debiased) {
-    coefs <- coefficients(survNet, s = "lambda.min") 
-    act.index <- which(coefs != 0)
-    var.index <- unique(attributes(XX)$assign[act.index])
-    varNames <- predVar[var.index]
     predicted <- cox(train, test, varNames = varNames)
   } else {
-    predicted <- predict(survNet, newx = XXpred, s = "lambda.min")
+    tt <- test[complete.cases(test[, varNames]), ]
+    ind <- which(names(tt) %in% c("DEATH", "LKADT_P"))
+    tt <- tt[,-ind]
+    for (var in setdiff(names(tt), c("DEATH", "LKADT_P", varNames))){
+      tt[var][is.na(tt[var])] <- tt[var][!is.na(tt[var])][1]
+    }
+    XXpred <- model.matrix(~ . - 1, tt)
+    predicted <- rep(NA, nrow(test))
+    predicted[complete.cases(test[, varNames])] <- predict(survNet, 
+                                                            newx = XXpred, s = "lambda.min")
   }
   predicted
 }
