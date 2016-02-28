@@ -17,7 +17,9 @@ survForest <- function(train, test, varNames = NULL) {
                               collapse = ""))
   
   rf.o <- rfsrc(rf.form, data = train,
-                mtry = 20, nsplit = 10, nodesize = 6)
+                mtry = 20, nsplit = 10, 
+                nodesize = 6,
+                importance = "none")
   
   pr <- rep(NA, nrow(test))
   pr[complete.cases(test[,varNames])] <- predict(rf.o, 
