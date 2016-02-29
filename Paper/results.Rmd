@@ -143,6 +143,8 @@ dd2$Imputation <- factor(dd2$Imputation, levels = c("MCAR", "MAR", "MARwR"))
 ave2 <- ave_df[, c(1, 2, 7)]
 ave2 <- subset(ave2, Method != "gb")
 
+postscript(file = "iAUC.eps", width = 10, height = 4,
+           onefile = FALSE, horizontal = FALSE, paper = "special")
 ggplot(dd2, aes(x = Method, y = value)) + 
   geom_point(color = "lightblue", size = 2) + 
   geom_point(data = melt(ave2, id.vars = c("Method", "Imputation")),
@@ -154,7 +156,7 @@ ggplot(dd2, aes(x = Method, y = value)) +
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   theme(axis.text.x  = element_text(angle = 45, vjust = 1, hjust = 1)) + 
   scale_x_discrete(labels = niceLabels)
-dev.copy2eps(file = "iAUC.eps", width = 10, height = 4)
+dev.off()
 ```
 
 
