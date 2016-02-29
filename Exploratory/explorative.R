@@ -11,9 +11,8 @@ conVar <- conVarCT[conVarCT %in% names(subTable)][-1]
 varLevels <- sapply(training, function(x) length(unique(x)))
 twoLevels <- names(varLevels[varLevels == 2])
 # Level plot
-csubTable <- subTable[complete.cases(subTable[, twoLevels]), which(names(subTable) %in% twoLevels)]
-csubTable <- csubTable[, colnames(csubTable) %in% disVar]
-cp <- cor(data.matrix(csubTable), method = "spearman")
+csubTable <- subTable[, intersect(twoLevels, disVar)]
+cp <- cor(data.matrix(csubTable))
 ord <- rev(hclust(as.dist(1-abs(cp)))$order)
 colPal <- col <- colorRampPalette(c("#67001F", "#B2182B", "#D6604D", 
                                     "#F4A582", "#FDDBC7", "#FFFFFF", "#D1E5F0", "#92C5DE", 
@@ -43,8 +42,6 @@ dev.off()
 csubTable <- subTable[, conVar]
 cp <- cor(data.matrix(csubTable), use = "pairwise.complete.obs")
 ord <- rev(hclust(as.dist(1-abs(cp)), method = "average")$order)
-varnames <- colnames(cp[ord, ord])
-varnames[c(18, 20)] <- c("WEIGHT", "HEIGHT")
 
 postscript(file = "corrplotCont.eps", width = 10, height = 10,
            onefile = FALSE, horizontal = FALSE, paper = "special")
@@ -52,11 +49,10 @@ print(
   splom(csubTable[, ord], 
         upper.panel = panel.splom,
         pscale = 0, 
-        varname.cex = .6,
+        varname.cex = .8,
         nbins = 15, 
         xlab = NULL, 
         lwd = 2, 
-        varnames = varnames,
         lower.panel = function(x, y, ...) {
           panel.fill(col = brewer.pal(9, "RdBu")[ round(cor(x, y, use = "pairwise.complete.obs") * 4 + 5)])
           cpl <- current.panel.limits()
