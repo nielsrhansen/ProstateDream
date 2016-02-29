@@ -8,7 +8,7 @@ library(randomForestSRC)
 survForest <- function(train, test, varNames = NULL) {
 
   if(is.null(varNames)) {
-    ## No variable selection
+    # no variable selection, all predictors are used for fitting the model
     varNames <- setdiff(names(train), c("LKADT_P", "DEATH"))
   }
     

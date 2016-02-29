@@ -244,7 +244,7 @@ trainModels <- function(train,
   if(trace) cat("Lasso\n")
     results$lassoMCAR <- lasso(trainMCAR, testMCAR)
     results$lassoMAR <- lasso(trainMAR, testMAR)
-    results$lassoMARwR <- lasso(trainMARwR, test = testMARwR)
+    results$lassoMARwR <- lasso(trainMARwR, testMARwR)
     results$lassoDebiasMCAR <- lasso(trainMCAR, testMCAR, debiased = TRUE)
     results$lassoDebiasMAR <- lasso(trainMAR, testMAR, debiased = TRUE)
     results$lassoDebiasMARwR <- lasso(trainMARwR, testMARwR, debiased = TRUE)
@@ -260,7 +260,7 @@ trainModels <- function(train,
   }
   
   if("GB" %in% methods) {
-    ## Gradient boosting
+    ## Gradient boosting with variable selection by the Lasso
     if(trace) cat("GB\n")
     results$gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace)
     results$gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace)
