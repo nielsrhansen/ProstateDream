@@ -62,7 +62,7 @@ clean <- function(data, discard) {
 ```{r DataClean}
 ## List of variables that are discarded before the modeling
 discard <-  c(
-  ## Variables that are mostly or entirely missing in the training data
+  ## Variables that are mostly or entirely missing in the training or validation data
   "HGTBLCAT", 
   "WGTBLCAT", 
   "HEAD_AND_NECK", 
@@ -72,6 +72,12 @@ discard <-  c(
   "CREACL", 
   "GLEAS_DX", 
   "STOMACH",
+  "BUN",
+  "CCRC",
+  "GLU",
+  "HEIGHTBL",
+  "WEIGHTBL",
+  "ARTTHROM",
   ## Treatment variables
   "TRT1_ID",  
   "TRT1_ID", 
@@ -122,6 +128,9 @@ source("../Exploratory/explorative.R")
 ```{r survival}
 prostateSurv0 <- survfit(Surv(LKADT_P, DEATH == "YES") ~ 1, data = CoreTable_training)
 prostateSurv <- survfit(Surv(LKADT_P, DEATH == "YES") ~ STUDYID, data = CoreTable_training)
+## Log-rank test
+survdiff(Surv(LKADT_P, DEATH == "YES") ~ STUDYID, data = CoreTable_training)
+
 survFit <- as.data.frame(summary(prostateSurv)[c(2, 6, 8)])
 survFit$Trial <- {
   study <- survFit$strata; 
@@ -146,6 +155,20 @@ dev.off()
 ```{r summary}
 rowSums(table(CoreTable_training[, c("STUDYID", "DEATH")]))
 summary(subset(CoreTable_training, STUDYID == "EFC6546")[, "LKADT_P"])
+
+trainTable <- CoreTableDict[CoreTableDict$Name %in% colnames(training), ][-(1:3),]
+trainTable <- trainTable[order(trainTable$Type), ]
+trainTable$missing <- apply(training[, trainTable$Name], 2, function(x) sum(is.na(x)))
+trainTable$missingVal <- apply(validation[, trainTable$Name], 2, function(x) sum(is.na(x)))
+trainTable$Name <- paste(rep(c("\\rowtwo ", "\\row "), times = 47)[-1], trainTable$Name)
+trainTable$Label[40:93] <- sapply(strsplit(trainTable$Label[40:93], ":"), 
+       function(x) tolower(x[length(x)]))
+
+
+
+
+print(xtable(trainTable[, c(1, 2, 4, 8, 9)]), include.rownames = FALSE,
+      file = "variables2.txt")
 ```
 
 ### ClassFrame
@@ -232,9 +255,9 @@ trainModels <- function(train,
   results$stabSelectMCAR <- stabSelect(trainMCAR, trace = trace)
   results$stabSelectMAR <- stabSelect(trainMAR, trace = trace)
   results$stabSelectMARwR <- stabSelect(trainMARwR, trace = trace)
-  results$varSelectMCAR <- as.character(with(stabSelectMCAR, var[freq > selectThres]))
-  results$varSelectMAR <- as.character(with(stabSelectMAR, var[freq > selectThres]))
-  results$varSelectMARwR <- as.character(with(stabSelectMARwR, var[freq > selectThres]))
+  results$varSelectMCAR <- as.character(with(results$stabSelectMCAR, var[freq > selectThres]))
+  results$varSelectMAR <- as.character(with(results$stabSelectMAR, var[freq > selectThres]))
+  results$varSelectMARwR <- as.character(with(results$stabSelectMARwR, var[freq > selectThres]))
 
   #######################
   ### Fitting models ####
@@ -382,18 +405,32 @@ save(res_list, file = "mainResults2")
 
 result <- trainModels(
   train = training, 
-  test = validation, 
+  test = training, 
   cF = cF,
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
   methods = "Lasso", 
   trace = TRUE)
+```
 
-# r, fig.height=12
-p1 <- plot(stabSelectMCAR)
-p2 <- plot(stabSelectMAR)
-p3 <- plot(stabSelectMARwR)
+
+```{r selection}
+postscript(file = "Selection.eps", width = 5, height = 15,
+           onefile = FALSE, horizontal = FALSE, paper = "special")
+p1 <- plot(result$stabSelectMCAR) + 
+  theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
+  geom_label(aes(x = 15, y = 0.8, label = "MCAR")) +
+  geom_abline(intercept = 0.5, slope = 0, color = "red")  
+p2 <- plot(result$stabSelectMAR) + 
+  theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
+  geom_label(aes(x = 15, y = 0.8, label = "MAR")) +
+  geom_abline(intercept = 0.5, slope = 0, color = "red")  
+p3 <- plot(result$stabSelectMARwR) + 
+  theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
+  geom_label(aes(x = 15, y = 0.8, label = "MARwR")) +
+  geom_abline(intercept = 0.5, slope = 0, color = "red")  
 gridExtra::grid.arrange(p1, p2, p3, ncol=1)
+dev.off()
 ```
 
