@@ -2,19 +2,16 @@
 # loads the needed packages and defines a function that takes the
 # training and test data sets and returns a prediction for the test data set
 # from the gradient boosting machine.
-# Automated variable selection is done
-# with a Cox model with LASSO penalty.
 
-# note that one should install the gbm package
-  # but not the CRAN version. Instead:
-  # use the GBMCI-implementation of gbm 
-  # installed from github with the following command
-  # install_github("uci-cbcl/GBMCI")
-  # where the install_github function is from the devtools package)
+# variable selection is done by the Lasso or by specifying varNames.
+# full = TRUE means that all predictor variables are used.
+
+# GBMCI-implementation of gbm is needed for 'distribution = "sci"' in the gbm command
+  # run devtools::install_github("uci-cbcl/GBMCI") to install it
+
 
 library(glmnet)
 library(gbm)
-
 
 gradBM <- function(train, test, varNames = NULL, ntrees = 1000, 
                    shrinkage = 1, verbose = FALSE, full = FALSE){
@@ -26,40 +23,38 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000,
     varNames <- varNames[l.table > 1]
     
   } else {
-
-  if(is.null(varNames)) {
-    # Variable selection as Søren did it. 
-    # The 'varNames' argument can be specified instead.
-    # fit a Cox LASSO
-    predVar <- setdiff(names(train), c("LKADT_P", "DEATH"))
     
-    # remove predictors that are constant
-    l.table <- apply(train[ ,predVar], 2, function(x) length(table(x)))
-    predVar <- predVar[l.table > 1]
-    
-    cox.mm <- model.matrix(~ . - 1, data = train[, predVar])
-    cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
-                        family = "cox")
-    
-    coefs <- coef(cox.cv, s = "lambda.min")
-    act.index <- which(coefs != 0)
-    
-    # select the active variables to be fitted in the gbmsci
-    var.index <- unique(attributes(cox.mm)$assign[act.index])
-    varNames <- predVar[var.index]
-  } else {
-    
-    # remove predictors that are constant
-    l.table <- apply(train[ ,varNames], 2, function(x) length(table(x)))
-    varNames <- varNames[l.table > 1]
-    
-  }
+    if(is.null(varNames)) {
+      # variable selection using the Lasso
+      predVar <- setdiff(names(train), c("LKADT_P", "DEATH"))
+      
+      # remove predictors that are constant
+      l.table <- apply(train[ ,predVar], 2, function(x) length(table(x)))
+      predVar <- predVar[l.table > 1]
+      
+      cox.mm <- model.matrix(~ . - 1, data = train[, predVar])
+      cox.cv <- cv.glmnet(cox.mm, Surv(train$LKADT_P, train$DEATH),
+                          family = "cox")
+      
+      coefs <- coef(cox.cv, s = "lambda.min")
+      act.index <- which(coefs != 0)
+      
+      # select the active variables to be fitted in the gbmsci
+      var.index <- unique(attributes(cox.mm)$assign[act.index])
+      varNames <- predVar[var.index]
+    } else {
+      
+      # remove predictors that are constant
+      l.table <- apply(train[ ,varNames], 2, function(x) length(table(x)))
+      varNames <- varNames[l.table > 1]
+      
+    }
   }
   
   
   gbm.form <- as.formula(paste("Surv(LKADT_P, DEATH) ~", 
-                                 paste(varNames, collapse = " + "), 
-                                 collapse = ""))
+                               paste(varNames, collapse = " + "), 
+                               collapse = ""))
   
   
   gbm.o <- gbm(gbm.form, data = train,
@@ -79,7 +74,7 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000,
   best.iter <- gbm.perf(gbm.o, plot.it = FALSE, method = "cv")
   pr <- rep(NA, nrow(test))
   pr[complete.cases(test[,varNames])] <- predict(gbm.o, 
-                                      test[complete.cases(test[,varNames]),], best.iter)
+                                                 test[complete.cases(test[,varNames]),], best.iter)
   -pr
 }
 

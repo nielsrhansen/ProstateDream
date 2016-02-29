@@ -92,30 +92,37 @@ predsForm <- function(data,
 #the status indicator from the provided "survobject" as 
 #predictors, fits a model and returns the variable to be 
 #imputed with predicted values from that model in every 
-#NA occurence.
+#NA occurence. If a seperate prediction data set is provided
+#in the option "predData", the "useResp"-argument is ignored
+#and imputation is conducted using model fits from "data"
+#to predict missing values in "predData".
 MARimp <- function(data, modeltype="linear", 
                         survobject=Surv(data$LKADT_P, 
                                         data$DEATH=="YES"),
                         form, transform="id", key="RPT",
-                   useResp=T) {
+                   useResp=T, predData=NULL) {
+  if (is.null(predData)) {
+    predData <- data
+  } else {
+    useResp <- F
+  }
   imp.varname <- as.character(form)[2]
   if (substr(imp.varname, 1,4)=="log(") {
     imp.varname <- substr(imp.varname, 5, nchar(imp.varname)-7)
   }
   
-  if (useResp) {
+  if (useResp) { #only allowed when predData == data
     time <- survobject[, "time"]
     status <- survobject[, "status"]
     data <- cbind(data, time, status)
-    #Compute Nelson-Aalen estimate of cumulative hazard
     H.hat <- nelsonaalen(data=data, time=time, status=status)
-    data <- cbind(data, H.hat)
+    data <- predData <- cbind(data, H.hat)
     form <- update(form, ~. + status + H.hat)
   }
   #Linear regression 
   if (modeltype=="linear") {
     model <- lm(form, data=data)
-    estimates <- predict(model, newdata=data)
+    estimates <- predict(model, newdata=predData)
     #Log-transformation
     if (transform=="log") {
       returnvar <- exp(estimates)-0.1    
@@ -128,7 +135,7 @@ MARimp <- function(data, modeltype="linear",
     ref.level <- imp.var.levels[1]
     data[,imp.varname] <- relevel(data[, imp.varname], ref=ref.level)
     model <- glm(form, data=data, family=binomial)
-    estimates <- predict(model, newdata=data, type="response")
+    estimates <- predict(model, newdata=predData, type="response")
     for (i in 1:length(estimates)) {
       if (!is.na(estimates[i])) {
         if (estimates[i]<0.5) {
@@ -140,8 +147,8 @@ MARimp <- function(data, modeltype="linear",
     }
     estimates <- factor(estimates)
   }
-  is.missing <- data[is.na(data[, imp.varname]), key]
-  returnvars <- data[, c(imp.varname, key)]
+  is.missing <- predData[is.na(predData[, imp.varname]), key]
+  returnvars <- predData[, c(imp.varname, key)]
   returnvars[returnvars[,key] %in% is.missing, 
        imp.varname] <- estimates[returnvars[,key] %in%
                                        is.missing]
@@ -150,29 +157,39 @@ MARimp <- function(data, modeltype="linear",
 }
 
 
-#Function that does MCAR imputation for the "impvar" variable
-MCARimp <- function(data, impvar) {
-  n <- nrow(data)
-  outvar <- data[, impvar]
+#Function that does MCAR imputation for the "impvar" variable.
+#If a second dataset is provided in the argument "predData",
+#the marginal distribution of "impvar" in "data" is used to
+#impute missing observations of "impvar" in "predData".
+MCARimp <- function(data, impvar, predData=NULL) {
+  if (is.null(predData)) predData <- data
+  n <- nrow(predData)
+  outvar <- predData[, impvar]
+  outvarT <- data[, impvar]
   impvar_noNA <- outvar[!is.na(outvar)]
+  impvar_noNAT <- outvarT[!is.na(outvarT)]
+  n_noNAT <- length(impvar_noNAT)
   n_noNA <- length(impvar_noNA)
-  ind <-  sample(1:n_noNA, n-n_noNA, replace=T)
-  outvar[is.na(outvar)] <- impvar_noNA[ind]
+  ind <-  sample(1:n_noNAT, n-n_noNA, replace=T)
+  outvar[is.na(outvar)] <- impvar_noNAT[ind]
   outvar
 }
 
-#Wrapper function that performs imputation
+#Wrapper function that performs imputation among the three
+#implemented options ("MCAR", "MAR", "MARresp")
 imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
                 min.obs.num=nrow(data), num.preds=NULL,
                 survobject=Surv(data$LKADT_P,
                                 data$DEATH=="YES"),
-                key="RPT", impType, avoid) {
-  dataout <- data
+                key="RPT", impType, avoid, predData=NULL) {
+  if (is.null(predData)) {
+    dataout <- data
+  } else dataout <- predData
   nImp <- length(impvars)
   if (impType == "MCAR") {
     for (i in 1:nImp) {
       outvar <- impvars[i]
-      dataout[, outvar] <- MCARimp(data, outvar)
+      dataout[, outvar] <- MCARimp(data, outvar, predData)
     }
   }
   if (impType == "MARresp" | impType=="MAR") {
@@ -182,7 +199,7 @@ imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
       outvar <- impvars[i]
       modeltype <- classFrame[classFrame$names==outvar, "modeltype"]
       if (modeltype=="factor") {
-        dataout[, outvar] <- MCARimp(data, outvar)
+        dataout[, outvar] <- MCARimp(data, outvar, predData)
       } else {
         transform <- classFrame[classFrame$names==outvar, "transform"]
         form <- predsForm(data, avoid=avoid, outvar,
@@ -191,7 +208,8 @@ imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
         dataout[, outvar] <- MARimp(data, modeltype, 
                                     survobject, form,
                                     transform, key,
-                                    useResp=useResp)
+                                    useResp=useResp,
+                                    predData=predData)
       }
     }
   }
