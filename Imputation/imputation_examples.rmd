@@ -109,3 +109,26 @@ imp(training, impute, cF,
 
 
 None of the functions are very efficient. I though this would not be necessary. If I am wrong, please tell me, and I will speed them up.
+
+####MAR on single observation
+Test functionality when data is split and training data set is used for fitting imputation models, while test data set is used to determine what predictions from these models to use as imputations. Default is that the two data sets are the same (corresponding to working only with the training data set). 
+```{r}
+t1 <- training[1,]
+t2 <- training[-1,]
+imp(t2, impute, cF, alpha=0.05, min.obs.num=nrow(t2), num.preds=5, 
+    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds), 
+    predData=t1)
+imp(t2, impute, cF, alpha=0.05,  
+    key="RPT", impType="MCAR", avoid=c(nonPreds, catPreds), 
+    predData=t1)
+
+#try with obs 479, which has no missing values
+identical(imp(training[-479,], impute, cF, alpha=0.05, min.obs.num=nrow(t2), 
+              num.preds=5, 
+    key="RPT", impType="MAR", avoid=c(nonPreds, catPreds), 
+    predData=training[479,]), training[479, ]) 
+  #says FALSE but eyeballing reveals that every entry is identical 
+identical(imp(training[-479,], impute, cF, alpha=0.05,  
+    key="RPT", impType="MCAR", avoid=c(nonPreds, catPreds), 
+    predData=training[479,]), training[479, ])
+```
