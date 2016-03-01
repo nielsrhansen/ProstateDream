@@ -1,13 +1,12 @@
 ---
 title: "Main"
-author: "Ann-Sophie Buchardt"
-date: "02/09/2016"
+author: c("Niels Richard Hansen", "Søren Wengel Mogensen", "Ann-Sophie Buchardt")
+date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 ---
 
 ```{r Preamble, echo=FALSE}
-gc()
-
+knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
 setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
 #setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
 source("../Boosting/gbm.R")
@@ -28,34 +27,34 @@ CoreTableDict <- read.table(file = "../Data/DataDictionary.csv",
                             stringsAsFactors = FALSE)
 ```
 
-### Data cleaning and preparation
+### Data filtering and cleaning
 
 ```{r DataCleanFunction}
 clean <- function(data, discard) {
+  data <- subset(data, select = -which(colnames(data) %in% discard))
+
   data <- transform(data, 
                     PSA = ifelse(PSA == 0, 0.01, PSA),
-                    ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2)))
+                    ECOG_C = factor((ECOG_C >= 1) + (ECOG_C >= 2), levels = c(0, 1, 2)))
   data$RACE_C[data$RACE_C == "Missing"] <- NA
   data$REGION_C[data$REGION_C == "MISSING"] <- NA
   
   for (i in seq_len(ncol(data))) {
     if (is.factor(data[, i])) {
       tmp <- as.character(data[, i])
-      tmp[tmp == ""] <- "NO"
-      tmp[tmp == "Y"] <- "YES"
-      data[, i] <- factor(tmp)
+      if(any(tmp == "" | tmp == "Y", na.rm = TRUE)) {
+        tmp[tmp == ""] <- "NO"
+        tmp[tmp == "Y"] <- "YES"
+        data[, i] <- factor(tmp, levels = c("NO", "YES"))
+      }
     }
     if (is.character(data[, i])) 
       data[, i] <- factor(data[, i])
-    if (is.numeric(data[, i]))
-      data[, i] <- as.numeric(data[, i])
   }
 
   data$DEATH <- ifelse(data$DEATH == "NO", 0, 1)
-
-  data <- subset(data, select = -which(colnames(data) %in% discard))
+  data
 }
-
 ```
 
 
@@ -107,6 +106,9 @@ discard <-  c(
 
 training <- clean(CoreTable_training, discard)
 validation <- clean(CoreTable_validation, discard)
+validation$RACE_C <- factor(validation$RACE_C, levels = levels(training$RACE_C))
+validation$REGION_C <- factor(validation$REGION_C, levels = levels(training$REGION_C))
+validation$REGION_C[is.na(validation$REGION_C)] <- "OTHER"
 
 conVarCT <- CoreTableDict$Name[CoreTableDict$Type == "NUM" & CoreTableDict$Name %in% names(training)]
 disVarCT <- CoreTableDict$Name[CoreTableDict$Type == "CHAR" & CoreTableDict$Name %in% names(training)]
@@ -134,7 +136,7 @@ survdiff(Surv(LKADT_P, DEATH == "YES") ~ STUDYID, data = CoreTable_training)
 survFit <- as.data.frame(summary(prostateSurv)[c(2, 6, 8)])
 survFit$Trial <- {
   study <- survFit$strata; 
-  levels(study) <- c("Mem. Sloan Kettering ", "Celgene", "Sanofi"); 
+  levels(study) <- c("Sloan Kettering ", "Celgene", "Sanofi"); 
   study}
 
 postscript(file = "Survival.eps", width = 5, height = 5,
@@ -150,11 +152,24 @@ geom_ribbon(aes(x = time, y = NULL, ymin = lower, ymax = upper, color = NULL),
 dev.off()
 ```
 
-### Brief summary table
+### Summary tables
 
 ```{r summary}
 rowSums(table(CoreTable_training[, c("STUDYID", "DEATH")]))
 summary(subset(CoreTable_training, STUDYID == "EFC6546")[, "LKADT_P"])
+xtable(
+  addmargins(table(rbind(CoreTable_training[, c("REGION_C", "STUDYID")], 
+              CoreTable_validation[, c("REGION_C", "STUDYID")]))),
+  digits = 0
+)
+
+xtable(
+  addmargins(table(rbind(CoreTable_training[, c("RACE_C", "STUDYID")], 
+                         CoreTable_validation[, c("RACE_C", "STUDYID")]))),
+  digits = 0
+)
+
+table(rbind(CoreTable_training[, c("RACE_C", "REGION_C", "STUDYID")]))
 
 trainTable <- CoreTableDict[CoreTableDict$Name %in% colnames(training), ][-(1:3),]
 trainTable <- trainTable[order(trainTable$Type), ]
@@ -163,9 +178,6 @@ trainTable$missingVal <- apply(validation[, trainTable$Name], 2, function(x) sum
 trainTable$Name <- paste(rep(c("\\rowtwo ", "\\row "), times = 47)[-1], trainTable$Name)
 trainTable$Label[40:93] <- sapply(strsplit(trainTable$Label[40:93], ":"), 
        function(x) tolower(x[length(x)]))
-
-
-
 
 print(xtable(trainTable[, c(1, 2, 4, 8, 9)]), include.rownames = FALSE,
       file = "variables2.txt")
@@ -193,57 +205,51 @@ classFrame <- data.frame(
 classFrame[classFrame$names %in% logPreds, "transform"] <- "log"
 classFrame[classFrame$names %in% catPreds, "modeltype"] <- "factor"
 classFrame[classFrame$names %in% binPreds, "modeltype"] <- "binary"
-
-impute <- setdiff(
-    names(training)[apply(is.na(training), 2, any)],
-    nonPreds)
-  
-cF <- subset(classFrame, names %in% impute)
 ```
-
-
-### Table of predictors
 
 ### Main training function
 
 ```{r}
 trainModels <- function(train, 
                         test, 
-                        methods = c("Lasso", "Cox", "GB", "GB*", "GBfull", "Forest", "Forest*", "Gam"),
+                        methods = c("Stability", "Lasso", "Cox", "GB", "GB*", "GBfull", "Forest", "Forest*", "Gam"),
                         cF, 
                         impute,
                         conVarCT,
                         disVarCT,
                         selectThres = 0.5,
-                        trace = FALSE) {
+                        trace = 0,
+                        B = 100) {
 
   ####################
   ### Imputation  ####
   ####################
   
   idInd <- which("RPT" == names(train))
-  if(trace) cat("MCAR train impute\n")
+  if(trace > 0) message("MCAR train impute\n")
   trainMCAR <- imp(train, impute, impType = "MCAR")[, -idInd]
-  if(trace) cat("MCAR test impute\n")
-  testMCAR <- imp(test, impute, impType = "MCAR")[, -idInd]
+  if(trace > 0) message("MCAR test impute\n")
+  testMCAR <- imp(train, impute, impType = "MCAR", predData = test)[, -idInd]
   
-  if(trace) cat("MAR train impute\n")
+  if(trace > 0) message("MAR train impute\n")
   trainMAR <- imp(train, impute, cF,
                   alpha = 0.05, min.obs.num = nrow(train), num.preds = 5,
                   key = "RPT", impType = "MAR", avoid = c(nonPreds, catPreds))[, -idInd]
-  if(trace) cat("MAR test impute\n")
-  testMAR <- imp(test, impute, cF,
+  if(trace > 0) message("MAR test impute\n")
+  testMAR <- imp(train, impute, cF,
                  alpha = 0.05, min.obs.num = nrow(test), num.preds = 5,
-                 key = "RPT", impType = "MAR", avoid = c(nonPreds, catPreds))[, -idInd]
+                 key = "RPT", impType = "MAR", avoid = c(nonPreds, catPreds),
+                 predData = test)[, -idInd]
   
-  if(trace) cat("MARwR train impute\n")
+  if(trace > 0) message("MARwR train impute\n")
   trainMARwR <- imp(train, impute, cF,
                     alpha = 0.05, min.obs.num = nrow(train), num.preds = 5,
                     survobject = Surv(train$LKADT_P, train$DEATH == 1),
                     key = "RPT", impType = "MARresp", avoid = c(nonPreds, catPreds))[, -idInd]
   
-  ## testMARwR is created with no imputation, prompting later functions to discard the incomplete cases
-  testMARwR <- test[, -idInd]
+  ## testMARwR is set equal to testMAR because responses are not available 
+  ## for prediction on test data in general
+  testMARwR <- testMAR
   
   results <- list()
   
@@ -251,20 +257,22 @@ trainModels <- function(train,
   ### Stability selection ####
   ############################
   
-  if(trace) cat("Stability selection\n")
-  results$stabSelectMCAR <- stabSelect(trainMCAR, trace = trace)
-  results$stabSelectMAR <- stabSelect(trainMAR, trace = trace)
-  results$stabSelectMARwR <- stabSelect(trainMARwR, trace = trace)
-  results$varSelectMCAR <- as.character(with(results$stabSelectMCAR, var[freq > selectThres]))
-  results$varSelectMAR <- as.character(with(results$stabSelectMAR, var[freq > selectThres]))
-  results$varSelectMARwR <- as.character(with(results$stabSelectMARwR, var[freq > selectThres]))
-
+  if("Stability" %in% methods) {
+    if(trace > 0) message("Stability selection\n")
+    results$stabSelectMCAR <- stabSelect(trainMCAR, trace = trace > 1, B = B)
+    results$stabSelectMAR <- stabSelect(trainMAR, trace = trace > 1, B = B)
+    results$stabSelectMARwR <- stabSelect(trainMARwR, trace = trace > 1, B = B)
+    varSelectMCAR <- as.character(with(results$stabSelectMCAR, var[freq > selectThres]))
+    varSelectMAR <- as.character(with(results$stabSelectMAR, var[freq > selectThres]))
+    varSelectMARwR <- as.character(with(results$stabSelectMARwR, var[freq > selectThres]))
+  }
+  
   #######################
   ### Fitting models ####
   #######################
   
   if("Lasso" %in% methods) {
-  if(trace) cat("Lasso\n")
+  if(trace > 0) message("Lasso\n")
     results$lassoMCAR <- lasso(trainMCAR, testMCAR)
     results$lassoMAR <- lasso(trainMAR, testMAR)
     results$lassoMARwR <- lasso(trainMARwR, testMARwR)
@@ -273,9 +281,9 @@ trainModels <- function(train,
     results$lassoDebiasMARwR <- lasso(trainMARwR, testMARwR, debiased = TRUE)
   }
   
-  if("Cox" %in% methods) {
+  if("Cox" %in% methods & "Stability" %in% methods) {
     ## Cox with stability selection
-    if(trace) cat("Cox\n")
+    if(trace > 0) message("Cox\n")
     results$coxMCAR <- cox(trainMCAR, testMCAR, varSelectMCAR)
     results$coxMAR <- cox(trainMAR, testMAR, varSelectMAR)
     results$coxMARwR <- cox(trainMARwR, testMARwR, varSelectMARwR)
@@ -284,45 +292,47 @@ trainModels <- function(train,
   
   if("GB" %in% methods) {
     ## Gradient boosting with variable selection by the Lasso
-    if(trace) cat("GB\n")
-    results$gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace)
-    results$gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace)
-    results$gbMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace)
+    if(trace > 0) message("GB\n")
+    results$gbMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
+    results$gbMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
+    results$gbMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
   }
   
-  if("GB*" %in% methods) {
+  if("GB*" %in% methods & "Stability" %in% methods) {
     ## Gradient boosting with stability selection
-    if(trace) cat("GB*\n")
-    results$gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = trace)
-    results$gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = trace)
-    results$gbStabMARwR <- gradBM(trainMARwR, testMARwR, varNames = varSelectMARwR, ntrees = 1000, shrinkage = 1, verbose = trace)
+    if(trace > 0) message("GB*\n")
+    results$gbStabMCAR <- gradBM(trainMCAR, testMCAR, varNames = varSelectMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
+    results$gbStabMAR <- gradBM(trainMAR, testMAR, varNames = varSelectMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
+    results$gbStabMARwR <- gradBM(trainMARwR, testMARwR, varNames = varSelectMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1)
   }
   
   if("GBfull" %in% methods) {
     ## Gradient boosting with no variable selection
-    if(trace) cat("GB full\n")
-    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE)
-    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE)
+    if(trace > 0) message("GB full\n")
+    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
+    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
+    results$gbFullMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
   }
   
   if("Forest" %in% methods) {
     ## Survival forests
-    if(trace) cat("Forest\n")
+    if(trace > 0) message("Forest\n")
     results$forestMCAR <- survForest(trainMCAR, testMCAR)
     results$forestMAR <- survForest(trainMAR, testMAR)
+    results$forestMARwR <- survForest(trainMARwR, testMARwR)
   }
   
-  if("Forest*" %in% methods) {
+  if("Forest*" %in% methods & "Stability" %in% methods) {
     ## Survival forests with stability selection
-    if(trace) cat("Forest*\n")
+    if(trace > 0) message("Forest*\n")
     results$forestStabMCAR <- survForest(trainMCAR, testMCAR, varNames = varSelectMCAR)
     results$forestStabMAR <- survForest(trainMAR, testMAR, varNames = varSelectMAR)
     results$forestStabMARwR <- survForest(trainMARwR, testMARwR, varNames = varSelectMARwR)
   }
   
-  if("Gam" %in% methods) {
+  if("Gam" %in% methods & "Stability" %in% methods) {
     ## Gam with stability selection
-    if(trace) cat("Gam\n")
+    if(trace > 0) message("Gam\n")
     results$gamMCAR <- gamPred(trainMCAR, testMCAR, varNames = varSelectMCAR, conVarCT, disVarCT) 
     results$gamMAR <- gamPred(trainMAR, testMAR, varNames = varSelectMAR, conVarCT, disVarCT)
     results$gamMARwR <- gamPred(trainMARwR, testMARwR, varNames = varSelectMARwR, conVarCT, disVarCT)
@@ -332,105 +342,114 @@ trainModels <- function(train,
 }
 ```
 
-
 ### CV loop
 
 ```{r cvloop}
-set.seed(10)
-k <- 5 # number of CV folds
+set.seed(1020)
+k <- 5 ## number of CV folds
 samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
                size = nrow(training), 
                replace = FALSE)
 
-res_list <- list()
+impute <- setdiff(
+    names(training)[apply(is.na(training), 2, any)],
+    nonPreds)
+  
+cF <- subset(classFrame, names %in% impute)
+
+results <- list()
 
 for (i in 1:k) {
   
   train <- training[samp != i, ]
   test <- training[samp == i, ]
  
-results <- trainModels(train, test)
-
-### Scoring models
-
-# Scoring
-scores <- data.frame(
-  ## Lasso
-  lassoMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoMCAR)),
-  lassoMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoMAR)),
-  lassoMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoMARwR)),
-  lassoDebiasMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoDebiasMCAR)),
-  lassoDebiasMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoDebiasMAR)),
-  lassoDebiasMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$lassoDebiasMARwR)),
-  ## Cox
-  coxMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$coxMCAR)),
-  coxMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$coxMAR)),
-  coxMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$coxMARwR)),
-  ## Gradient boosting
-  gbMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbMCAR)),
-  gbMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbMAR)),
-  gbMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbMARwR)),
-  gbStabMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbStabMCAR)),
-  gbStabMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbStabMAR)),
-  gbStabMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbStabMARwR)),
-  gbFullMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbFullMCAR)),
-  gbFullMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gbFullMAR)),
-  ## Forests
-  forestMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$forestMCAR)),
-  forestMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$forestMAR)),
-  forestStabMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$forestStabMCAR)),
-  forestStabMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$forestStabMAR)),
-  forestStabMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$forestStabMARwR)),
-  ## Gam
-  gamMCAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gamMCAR)),
-  gamMAR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gamMAR)),
-  gamMARwR = unlist(score_q1a(test$LKADT_P, test$DEATH, results$gamMARwR))
-)
-scores <- t(as.matrix(scores[, order(scores["iAUC", ], decreasing = TRUE)]))
-
-res_list[[i]] <- scores
+  results[[i]] <- trainModels(
+    train = train, 
+    test = test, 
+    cF = cF,
+    impute = impute,
+    conVarCT = conVarCT,
+    disVarCT = disVarCT,
+    trace = 1
+  )
+  message(paste("CV round", i, "\n"))
 }
 ```
 
+```{r scoring}
+res_list <- list()
+
+for (i in 1:k) {
+  
+  test <- training[samp == i, ]
+
+  ### Scoring models
+  tmp <- results[[i]][-grep("stabSelect", names(results[[i]]))]
+
+  scores <- sapply(tmp, 
+                   function(x)
+                     unlist(score_q1a(test$LKADT_P, test$DEATH, x))
+  )  
+  
+  scores <- t(as.matrix(scores[, order(scores["iAUC", ], decreasing = TRUE)]))
+  res_list[[i]] <- scores
+  message(paste("CV round", i, "\n"))
+}
+```
 
 ### Results
 
 ```{r results}
-save(res_list, file = "mainResults2")
+## Storing results using seed in name
+save(res_list, file = "mainResults1020")
 ```
 
 ### Full models for validation submission
 
-```{r}
-
-result <- trainModels(
+```{r validation}
+set.seed(102030)
+results <- trainModels(
   train = training, 
-  test = training, 
+  test = validation, 
   cF = cF,
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
-  methods = "Lasso", 
-  trace = TRUE)
+  trace = 1
+)
 ```
 
+
+```{r}
+tmp <- results[-grep("stabSelect", names(results))]
+for(i in seq_along(tmp)) {
+  riskhat <- cbind(validation[, "RPT", drop = FALSE], data.frame(riskScoreGlobal = tmp[[i]]))
+  write.csv(riskhat, file = paste("Validation/", names(tmp)[[i]], ".csv", sep = ""), row.names=FALSE)
+}
+```
 
 ```{r selection}
 postscript(file = "Selection.eps", width = 5, height = 15,
            onefile = FALSE, horizontal = FALSE, paper = "special")
-p1 <- plot(result$stabSelectMCAR) + 
+p1 <- plot(predictions$stabSelectMCAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MCAR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-p2 <- plot(result$stabSelectMAR) + 
+p2 <- plot(predictions$stabSelectMAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MAR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-p3 <- plot(result$stabSelectMARwR) + 
+p3 <- plot(predictions$stabSelectMARwR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MARwR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
 gridExtra::grid.arrange(p1, p2, p3, ncol=1)
 dev.off()
 ```
+
+
+
+
+
 
