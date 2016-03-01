@@ -210,6 +210,8 @@ imp <- function(data, impvars, classFrame=NULL, alpha=0.05,
                                     transform, key,
                                     useResp=useResp,
                                     predData=predData)
+        ## If the MAR imputation has not been successful
+        dataout[, outvar] <- MCARimp(data, outvar, predData)
       }
     }
   }
