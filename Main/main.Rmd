@@ -220,7 +220,8 @@ trainModels <- function(train,
                         selectThres = 0.5,
                         save.object = FALSE,
                         trace = 0,
-                        B = 100) {
+                        B = 100,
+                        file.seed = NULL) {
 
   ####################
   ### Imputation  ####
@@ -310,17 +311,17 @@ trainModels <- function(train,
   if("GBfull" %in% methods) {
     ## Gradient boosting with no variable selection
     if(trace > 0) message("GB full\n")
-    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
-    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
-    results$gbFullMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
+    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object, file.seed = file.seed)
+    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object, file.seed = file.seed)
+    results$gbFullMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object, file.seed = file.seed)
   }
   
   if("Forest" %in% methods) {
     ## Survival forests
     if(trace > 0) message("Forest\n")
-    results$forestMCAR <- survForest(trainMCAR, testMCAR, save.object = save.object)
-    results$forestMAR <- survForest(trainMAR, testMAR, save.object = save.object)
-    results$forestMARwR <- survForest(trainMARwR, testMARwR, save.object = save.object)
+    results$forestMCAR <- survForest(trainMCAR, testMCAR, save.object = save.object, file.seed = file.seed)
+    results$forestMAR <- survForest(trainMAR, testMAR, save.object = save.object, file.seed = file.seed)
+    results$forestMARwR <- survForest(trainMARwR, testMARwR, save.object = save.object, file.seed = file.seed)
   }
   
   if("Forest*" %in% methods & "Stability" %in% methods) {
@@ -410,7 +411,8 @@ save(res_list, file = paste("mainResults", seed, sep = ""))
 ### Full models for validation submission
 
 ```{r validation}
-set.seed(102030)
+seed.val <- 102030 
+set.seed(seed.val)
 results <- trainModels(
   train = training, 
   test = validation, 
@@ -419,7 +421,8 @@ results <- trainModels(
   conVarCT = conVarCT,
   disVarCT = disVarCT,
   save.object = TRUE,
-  trace = 1
+  trace = 1,
+  file.seed = seed.val
 )
 ```
 

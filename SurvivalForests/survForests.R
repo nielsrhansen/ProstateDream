@@ -5,7 +5,8 @@ library(randomForestSRC)
 # loads the a required package and defines a function that takes a test and training data set
 # and returns the prediction for the test data set.
 
-survForest <- function(train, test, varNames = NULL, save.object = FALSE) {
+survForest <- function(train, test, varNames = NULL, save.object = FALSE,
+                       file.seed = NULL) {
 
   if(is.null(varNames)) {
     # no variable selection, all predictors are used for fitting the model
@@ -21,7 +22,8 @@ survForest <- function(train, test, varNames = NULL, save.object = FALSE) {
                 nodesize = 6,
                 importance = "none")
   
-  if (save.object) save(rf.o, file = paste("rsf", substitute(train), ".RData", sep = ""))
+  if (save.object) save(rf.o, file = paste("rsf", substitute(train), file.seed
+                                           , ".RData", sep = ""))
   
   pr <- rep(NA, nrow(test))
   pr[complete.cases(test[,varNames])] <- predict(rf.o, 
