@@ -14,7 +14,8 @@ library(glmnet)
 library(gbm)
 
 gradBM <- function(train, test, varNames = NULL, ntrees = 1000, 
-                   shrinkage = 1, verbose = FALSE, full = FALSE){
+                   shrinkage = 1, verbose = FALSE, full = FALSE,
+                   save.object = FALSE){
   
   if(full){
     
@@ -70,6 +71,8 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000,
                n.minobsinnode = 10,
                keep.data = TRUE,
                verbose = verbose)
+  
+  if (save.object) save(gbm.o, file = paste("gbm", substitute(train), ".RData", sep = ""))
   
   best.iter <- gbm.perf(gbm.o, plot.it = FALSE, method = "cv")
   pr <- rep(NA, nrow(test))

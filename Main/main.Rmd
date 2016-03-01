@@ -215,7 +215,8 @@ trainModels <- function(train,
                         conVarCT,
                         disVarCT,
                         selectThres = 0.5,
-                        trace = FALSE) {
+                        trace = FALSE,
+                        save.object = FALSE) {
 
   ####################
   ### Imputation  ####
@@ -301,15 +302,15 @@ trainModels <- function(train,
   if("GBfull" %in% methods) {
     ## Gradient boosting with no variable selection
     if(trace) cat("GB full\n")
-    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE)
-    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE)
+    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE, save.object = save.object)
+    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE, save.object = save.object)
   }
   
   if("Forest" %in% methods) {
     ## Survival forests
     if(trace) cat("Forest\n")
-    results$forestMCAR <- survForest(trainMCAR, testMCAR)
-    results$forestMAR <- survForest(trainMAR, testMAR)
+    results$forestMCAR <- survForest(trainMCAR, testMCAR, save.object = save.object)
+    results$forestMAR <- survForest(trainMAR, testMAR, save.object = save.object)
   }
   
   if("Forest*" %in% methods) {
@@ -410,9 +411,39 @@ result <- trainModels(
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
-  methods = "Lasso", 
-  trace = TRUE)
+  methods = c("Lasso", "Forest", "GBfull"), 
+  trace = TRUE,
+  save.object = TRUE)
 ```
+
+```{r vimp}
+load("rsftrainMAR.RData")
+rf.o.MAR <- rf.o
+load("rsftrainMCAR.RData")
+rf.o.MCAR <- rf.o
+load("gbmtrainMAR.RData")
+gbm.o.MAR <- gbm.o
+load("gbmtrainMCAR.RData")
+gbm.o.MCAR <- gbm.o
+
+rm(rf.o, gbm.o)
+
+vimp.MAR <- vimp(rf.o.MAR)
+vimp.MCAR <- vimp(rf.o.MCAR)
+
+vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]
+vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]
+
+summary(gbm.o.MAR, plotit = FALSE)
+summary(gbm.o.MCAR, plotit = FALSE)
+
+impor.df <- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
+           rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
+           gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
+           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var)
+impor.df
+```
+
 
 
 ```{r selection}
