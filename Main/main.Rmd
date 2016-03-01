@@ -218,13 +218,9 @@ trainModels <- function(train,
                         conVarCT,
                         disVarCT,
                         selectThres = 0.5,
-<<<<<<< HEAD
-                        trace = FALSE,
-                        save.object = FALSE) {
-=======
+                        save.object = FALSE,
                         trace = 0,
                         B = 100) {
->>>>>>> 83cbe9c8e27ee5993e4d125b2a199d7962c69fdc
 
   ####################
   ### Imputation  ####
@@ -313,30 +309,18 @@ trainModels <- function(train,
   
   if("GBfull" %in% methods) {
     ## Gradient boosting with no variable selection
-<<<<<<< HEAD
-    if(trace) cat("GB full\n")
-    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE, save.object = save.object)
-    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace, full = TRUE, save.object = save.object)
-=======
     if(trace > 0) message("GB full\n")
-    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
-    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
-    results$gbFullMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE)
->>>>>>> 83cbe9c8e27ee5993e4d125b2a199d7962c69fdc
+    results$gbFullMCAR <- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
+    results$gbFullMAR <- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
+    results$gbFullMARwR <- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace > 1, full = TRUE, save.object = save.object)
   }
   
   if("Forest" %in% methods) {
     ## Survival forests
-<<<<<<< HEAD
-    if(trace) cat("Forest\n")
+    if(trace > 0) message("Forest\n")
     results$forestMCAR <- survForest(trainMCAR, testMCAR, save.object = save.object)
     results$forestMAR <- survForest(trainMAR, testMAR, save.object = save.object)
-=======
-    if(trace > 0) message("Forest\n")
-    results$forestMCAR <- survForest(trainMCAR, testMCAR)
-    results$forestMAR <- survForest(trainMAR, testMAR)
-    results$forestMARwR <- survForest(trainMARwR, testMARwR)
->>>>>>> 83cbe9c8e27ee5993e4d125b2a199d7962c69fdc
+    results$forestMARwR <- survForest(trainMARwR, testMARwR, save.object = save.object)
   }
   
   if("Forest*" %in% methods & "Stability" %in% methods) {
@@ -434,14 +418,9 @@ results <- trainModels(
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
-<<<<<<< HEAD
-  methods = c("Lasso", "Forest", "GBfull"), 
-  trace = TRUE,
-  save.object = TRUE)
-=======
+  save.object = TRUE,
   trace = 1
 )
->>>>>>> 83cbe9c8e27ee5993e4d125b2a199d7962c69fdc
 ```
 
 ```{r vimp}
@@ -449,26 +428,27 @@ load("rsftrainMAR.RData")
 rf.o.MAR <- rf.o
 load("rsftrainMCAR.RData")
 rf.o.MCAR <- rf.o
+load("rsftrainMARwR.RData")
+rf.o.MARwR <- rf.o
 load("gbmtrainMAR.RData")
 gbm.o.MAR <- gbm.o
 load("gbmtrainMCAR.RData")
 gbm.o.MCAR <- gbm.o
+load("gbmtrainMARwR.RData")
+gbm.o.MARwR <- gbm.o
 
 rm(rf.o, gbm.o)
 
 vimp.MAR <- vimp(rf.o.MAR)
 vimp.MCAR <- vimp(rf.o.MCAR)
-
-vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]
-vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]
-
-summary(gbm.o.MAR, plotit = FALSE)
-summary(gbm.o.MCAR, plotit = FALSE)
+vimp.MARwR <- vimp(rf.o.MARwR)
 
 impor.df <- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
            rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
+           rsf.MARwR = vimp.MARwR$importance[order(vimp.MARwR$importance, decreasing = TRUE)],
            gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
-           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var)
+           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var,
+           gbm.MARwR = summary(gbm.o.MARwR, plotit = FALSE)$var)
 impor.df
 ```
 
