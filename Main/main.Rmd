@@ -345,7 +345,8 @@ trainModels <- function(train,
 ### CV loop
 
 ```{r cvloop}
-set.seed(1020)
+seed <- 1020
+set.seed(seed)
 k <- 5 ## number of CV folds
 samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
                size = nrow(training), 
@@ -402,7 +403,7 @@ for (i in 1:k) {
 
 ```{r results}
 ## Storing results using seed in name
-save(res_list, file = "mainResults1020")
+save(res_list, file = paste("mainResults", seed, sep = ""))
 ```
 
 ### Full models for validation submission
@@ -444,7 +445,7 @@ p3 <- plot(predictions$stabSelectMARwR) +
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MARwR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-gridExtra::grid.arrange(p1, p2, p3, ncol=1)
+print(gridExtra::grid.arrange(p1, p2, p3, ncol=1))
 dev.off()
 ```
 
