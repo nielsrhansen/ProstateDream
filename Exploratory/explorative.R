@@ -54,7 +54,7 @@ print(
         xlab = NULL, 
         lwd = 2, 
         lower.panel = function(x, y, ...) {
-          panel.fill(col = brewer.pal(9, "RdBu")[ round(cor(x, y, use = "pairwise.complete.obs") * 4 + 5)])
+          panel.fill(col = colPal[ round(cor(x, y, use = "pairwise.complete.obs") * 100 + 100)])
           cpl <- current.panel.limits()
           panel.text(mean(range(x, na.rm = TRUE)), mean(range(y, na.rm = TRUE)), 
                      round(cor(x, y, use = "pairwise.complete.obs"), digits = 2),

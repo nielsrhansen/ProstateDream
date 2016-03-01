@@ -1,7 +1,6 @@
 main.html
-Survival.eps
-corrplotCont.eps
-corrplotDis.eps
-corrplotDisSmall.eps
-Selection.eps
+*.eps
 variables.txt
+variables2.txt
+Validation
+main_cache

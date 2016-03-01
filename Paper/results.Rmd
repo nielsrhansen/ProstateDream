@@ -10,7 +10,7 @@ output: html_document
 library(xtable)
 library(ggplot2)
 library(reshape2)
-load("../Main/mainResults")
+load("../Main/mainResults1020")
 ```
 
 ### CV folds, ordered by iAUC
@@ -129,7 +129,7 @@ ggplot(dd, aes(x = variable, y = value, fill = Method)) +
 
 ```{r iAUCplot}
 ## levOrd <- names(sort(tapply(ave_df$iAUC, ave_df$Method, mean), decreasing = TRUE))
-tmp <- ave_df[ave_df$Imputation == "MCAR", ]
+tmp <- ave_df[ave_df$Imputa == "MCAR", ]
 tmp <- subset(tmp, Method != "gb")
 ord <- order(tmp[, "iAUC"], decreasing = TRUE)
 niceLabels <- c("Cox*", "Forest", "Forest*", "Gam*", "Boosting", 
@@ -139,7 +139,7 @@ levOrd = levOrd[levOrd != "gb"]
 dd2 <- dd
 dd2 <- subset(dd2, Method != "gb")
 dd2$Method <- factor(dd2$Method, levels = levOrd)
-dd2$Imputation <- factor(dd2$Imputation, levels = c("MCAR", "MAR", "MARwR"))         
+dd2$Imputa <- factor(dd2$Imputa, levels = c("MCAR", "MAR", "MARwR"))         
 ave2 <- ave_df[, c(1, 2, 7)]
 ave2 <- subset(ave2, Method != "gb")
 
@@ -147,9 +147,9 @@ postscript(file = "iAUC.eps", width = 10, height = 4,
            onefile = FALSE, horizontal = FALSE, paper = "special")
 ggplot(dd2, aes(x = Method, y = value)) + 
   geom_point(color = "lightblue", size = 2) + 
-  geom_point(data = melt(ave2, id.vars = c("Method", "Imputation")),
+  geom_point(aes(y = iAUC), data = ave2,
             color = "red", size = 3) + 
-  facet_grid( ~ Imputation) + 
+  facet_grid( ~ Imputa) + 
   coord_cartesian(ylim=c(.6, 0.75)) +
   ylab("Integrated AUC") + xlab("Method") +
   theme(legend.position = "top") + 

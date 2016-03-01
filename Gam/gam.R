@@ -13,5 +13,5 @@ gamPred <- function(train, test, varNames, conVar, disVar) {
   )
   
   survGam <- gam(gamForm, data = train, family = cox.ph(), weight = DEATH)
-  predict(survGam, newdata = test)
+  predict(survGam, newdata = test[, varNames])
 }
