@@ -72,9 +72,6 @@ gradBM <- function(train, test, varNames = NULL, ntrees = 1000,
                verbose = verbose)
   
   best.iter <- gbm.perf(gbm.o, plot.it = FALSE, method = "cv")
-  pr <- rep(NA, nrow(test))
-  pr[complete.cases(test[,varNames])] <- predict(gbm.o, 
-                                                 test[complete.cases(test[,varNames]),], best.iter)
-  -pr
+  - predict(gbm.o, test[, varNames], best.iter)
 }
 

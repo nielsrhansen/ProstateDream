@@ -20,10 +20,5 @@ survForest <- function(train, test, varNames = NULL) {
                 mtry = 20, nsplit = 10, 
                 nodesize = 6,
                 importance = "none")
-  
-  pr <- rep(NA, nrow(test))
-  pr[complete.cases(test[,varNames])] <- predict(rf.o, 
-                                      newdata = test[complete.cases(test[,varNames]),])$predicted
-  pr
-  
+  predict(rf.o, newdata = test[, varNames])$predicted
 }

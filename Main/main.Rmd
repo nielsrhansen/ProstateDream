@@ -5,7 +5,7 @@ date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 ---
 
-```{r Preamble, echo=FALSE}
+```{r Preamble, echo=FALSE, cache=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
 setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
 #setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
@@ -17,6 +17,7 @@ source("../Gam/gam.R")
 source("../StabilitySelection/stabSelect.R")
 library(survival)
 library(xtable)
+
 ```
 
 ```{r Data}
@@ -345,7 +346,7 @@ trainModels <- function(train,
 ### CV loop
 
 ```{r cvloop}
-seed <- 1020
+seed <- 12
 set.seed(seed)
 k <- 5 ## number of CV folds
 samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
@@ -409,7 +410,12 @@ save(res_list, file = paste("mainResults", seed, sep = ""))
 ### Full models for validation submission
 
 ```{r validation}
-set.seed(102030)
+impute <- setdiff(
+    names(training)[apply(is.na(training), 2, any)],
+    nonPreds)
+cF <- subset(classFrame, names %in% impute)
+
+set.seed(102)
 results <- trainModels(
   train = training, 
   test = validation, 
@@ -431,17 +437,17 @@ for(i in seq_along(tmp)) {
 ```
 
 ```{r selection}
-postscript(file = "Selection.eps", width = 5, height = 15,
+postscript(file = "Selection.eps", width = 5, height = 12,
            onefile = FALSE, horizontal = FALSE, paper = "special")
-p1 <- plot(predictions$stabSelectMCAR) + 
+p1 <- plot(results$stabSelectMCAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MCAR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-p2 <- plot(predictions$stabSelectMAR) + 
+p2 <- plot(results$stabSelectMAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MAR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-p3 <- plot(predictions$stabSelectMARwR) + 
+p3 <- plot(results$stabSelectMARwR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MARwR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
