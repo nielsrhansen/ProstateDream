@@ -7,8 +7,8 @@ output: html_document
 
 ```{r Preamble, echo=FALSE, cache=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
-setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
-#setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
+#setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
+setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
 source("../Boosting/gbm.R")
 source("../SurvivalForests/survForests.R")
 source("../Imputation/imputation.R")
@@ -348,7 +348,7 @@ trainModels <- function(train,
 ### CV loop
 
 ```{r cvloop}
-seed <- 12
+seed <- 9004
 set.seed(seed)
 k <- 5 ## number of CV folds
 samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
@@ -417,7 +417,7 @@ impute <- setdiff(
     nonPreds)
 cF <- subset(classFrame, names %in% impute)
 
-seed.val <- 102030 
+seed.val <- 6681
 set.seed(seed.val)
 results <- trainModels(
   train = training, 
@@ -431,36 +431,6 @@ results <- trainModels(
   file.seed = seed.val
 )
 ```
-
-```{r vimp}
-load("rsftrainMAR.RData")
-rf.o.MAR <- rf.o
-load("rsftrainMCAR.RData")
-rf.o.MCAR <- rf.o
-load("rsftrainMARwR.RData")
-rf.o.MARwR <- rf.o
-load("gbmtrainMAR.RData")
-gbm.o.MAR <- gbm.o
-load("gbmtrainMCAR.RData")
-gbm.o.MCAR <- gbm.o
-load("gbmtrainMARwR.RData")
-gbm.o.MARwR <- gbm.o
-
-rm(rf.o, gbm.o)
-
-vimp.MAR <- vimp(rf.o.MAR)
-vimp.MCAR <- vimp(rf.o.MCAR)
-vimp.MARwR <- vimp(rf.o.MARwR)
-
-impor.df <- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
-           rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
-           rsf.MARwR = vimp.MARwR$importance[order(vimp.MARwR$importance, decreasing = TRUE)],
-           gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
-           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var,
-           gbm.MARwR = summary(gbm.o.MARwR, plotit = FALSE)$var)
-impor.df
-```
-
 
 
 ```{r}
