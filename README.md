@@ -40,7 +40,7 @@ for the imputation and the training of the different models. These implementatio
 and sourced in the beginning of `main.Rmd`. 
 
 Running `main.Rmd` (using knitr) loads and preprocesses the data, computes various 
-summaries and construct descriptive figures. It then runs the 5-fold cross-validation, stores the results in a file, 
+summaries and constructs descriptive figures. It then runs the 5-fold cross-validation, stores the results in a file, 
 refits all models to the entire data set and makes predictions on the validation data. It finally constructs plots 
 of the selection probabilities for stability selection.
 
