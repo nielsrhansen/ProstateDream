@@ -7,17 +7,15 @@ output: html_document
 
 ```{r Preamble, echo=FALSE, cache=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
-#setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
-setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
 source("../Boosting/gbm.R")
 source("../SurvivalForests/survForests.R")
 source("../Imputation/imputation.R")
 source("../SynapseScripts/score.R")
 source("../Gam/gam.R")
 source("../StabilitySelection/stabSelect.R")
-library(survival)
-library(xtable)
-
+library("survival")
+library("xtable")
+library("reshape2")
 ```
 
 ```{r Data}
@@ -382,7 +380,7 @@ trainModels <- function(train,
 
 ### CV loop
 
-```{r cvloop, eval=FALSE}
+```{r cvloop, eval=TRUE}
 ## To obtain identical results as in the paper use the three seeds 
 ## 12, 1213 and 121314.
 seed <- 121314
@@ -418,7 +416,7 @@ for (i in 1:k) {
 }
 ```
 
-```{r scoring, eval=FALSE}
+```{r scoring, eval=TRUE}
 res_list <- list()
 
 for (i in 1:k) {
@@ -441,7 +439,7 @@ for (i in 1:k) {
 
 ### Results
 
-```{r results, eval=FALSE}
+```{r results, eval=TRUE}
 ## Storing results using seed in name
 save(res_list, file = paste("mainResults", seed, sep = ""))
 ```
@@ -463,7 +461,7 @@ results <- trainModels(
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
-  save.object = TRUE,
+  save.object = FALSE,
   trace = 1,
   file.seed = seed.val
 )
