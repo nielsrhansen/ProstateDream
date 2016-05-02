@@ -1,4 +1,4 @@
-# R code for: Survival prognosis and variable selection: A case study for metastatic castrate resistant prostate cancer patients
+# R code for *Survival prognosis and variable selection: A case study for metastatic castrate resistant prostate cancer patients*
 
 A paper written in relation to [The Prostate Cancer DREAM Challenge](https://www.synapse.org/ ProstateCancerChallenge).
 
