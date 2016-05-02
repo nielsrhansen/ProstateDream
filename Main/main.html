@@ -229,7 +229,7 @@ dev.off()</code></pre>
   digits = 0
 )</code></pre>
 <pre><code>## % latex table generated in R 3.2.2 by xtable 1.8-0 package
-## % Tue Mar  1 14:04:23 2016
+## % Wed Mar  2 15:14:42 2016
 ## \begin{table}[ht]
 ## \centering
 ## \begin{tabular}{rrrrrr}
@@ -254,7 +254,7 @@ dev.off()</code></pre>
   digits = 0
 )</code></pre>
 <pre><code>## % latex table generated in R 3.2.2 by xtable 1.8-0 package
-## % Tue Mar  1 14:04:23 2016
+## % Wed Mar  2 15:14:42 2016
 ## \begin{table}[ht]
 ## \centering
 ## \begin{tabular}{rrrrrr}
@@ -371,8 +371,10 @@ classFrame[classFrame$names %in% binPreds, &quot;modeltype&quot;] &lt;- &quot;bi
                         conVarCT,
                         disVarCT,
                         selectThres = 0.5,
+                        save.object = FALSE,
                         trace = 0,
-                        B = 100) {
+                        B = 100,
+                        file.seed = NULL) {
 
   ####################
   ### Imputation  ####
@@ -462,17 +464,17 @@ classFrame[classFrame$names %in% binPreds, &quot;modeltype&quot;] &lt;- &quot;bi
   if(&quot;GBfull&quot; %in% methods) {
     ## Gradient boosting with no variable selection
     if(trace &gt; 0) message(&quot;GB full\n&quot;)
-    results$gbFullMCAR &lt;- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE)
-    results$gbFullMAR &lt;- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE)
-    results$gbFullMARwR &lt;- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE)
+    results$gbFullMCAR &lt;- gradBM(trainMCAR, testMCAR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE, save.object = save.object, file.seed = file.seed)
+    results$gbFullMAR &lt;- gradBM(trainMAR, testMAR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE, save.object = save.object, file.seed = file.seed)
+    results$gbFullMARwR &lt;- gradBM(trainMARwR, testMARwR, ntrees = 1000, shrinkage = 1, verbose = trace &gt; 1, full = TRUE, save.object = save.object, file.seed = file.seed)
   }
   
   if(&quot;Forest&quot; %in% methods) {
     ## Survival forests
     if(trace &gt; 0) message(&quot;Forest\n&quot;)
-    results$forestMCAR &lt;- survForest(trainMCAR, testMCAR)
-    results$forestMAR &lt;- survForest(trainMAR, testMAR)
-    results$forestMARwR &lt;- survForest(trainMARwR, testMARwR)
+    results$forestMCAR &lt;- survForest(trainMCAR, testMCAR, save.object = save.object, file.seed = file.seed)
+    results$forestMAR &lt;- survForest(trainMAR, testMAR, save.object = save.object, file.seed = file.seed)
+    results$forestMARwR &lt;- survForest(trainMARwR, testMARwR, save.object = save.object, file.seed = file.seed)
   }
   
   if(&quot;Forest*&quot; %in% methods &amp; &quot;Stability&quot; %in% methods) {
@@ -496,7 +498,7 @@ classFrame[classFrame$names %in% binPreds, &quot;modeltype&quot;] &lt;- &quot;bi
 </div>
 <div id="cv-loop" class="section level3">
 <h3>CV loop</h3>
-<pre class="r"><code>seed &lt;- 1020
+<pre class="r"><code>seed &lt;- 121314
 set.seed(seed)
 k &lt;- 5 ## number of CV folds
 samp &lt;- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
@@ -558,7 +560,8 @@ save(res_list, file = paste(&quot;mainResults&quot;, seed, sep = &quot;&quot;))<
     nonPreds)
 cF &lt;- subset(classFrame, names %in% impute)
 
-set.seed(102030)
+seed.val &lt;- 3020 
+set.seed(seed.val)
 results &lt;- trainModels(
   train = training, 
   test = validation, 
@@ -566,19 +569,19 @@ results &lt;- trainModels(
   impute = impute,
   conVarCT = conVarCT,
   disVarCT = disVarCT,
-  trace = 1
+  save.object = TRUE,
+  trace = 1,
+  file.seed = seed.val
 )</code></pre>
 <pre><code>## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
 ## 5
 
 ## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
-## 5</code></pre>
-<pre><code>## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
-## 5 9</code></pre>
-<pre><code>## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
-## 3
+## 5
 
 ## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
+## 5</code></pre>
+<pre><code>## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
 ## 3
 
 ## Warning in coxph(survForm, train): X matrix deemed to be singular; variable
@@ -1169,57 +1172,10 @@ results &lt;- trainModels(
 ## of type 'NULL'
 
 ## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
-## of type 'NULL'
-
-## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre><code>## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
 ## of type 'NULL'
 
 ## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
@@ -1230,12 +1186,374 @@ results &lt;- trainModels(
 
 ## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
 ## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre><code>## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre><code>## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre><code>## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre><code>## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'
+
+## Warning in is.na(fit$coefficients): is.na() applied to non-(list or vector)
+## of type 'NULL'</code></pre>
+<pre><code>## Warning in fitter(X, Y, strats, offset, init, control, weights = weights, :
+## Loglik converged before variable 11 ; beta may be infinite.</code></pre>
+<pre class="r"><code>load(paste(&quot;rsftrainMAR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+rf.o.MAR &lt;- rf.o
+load(paste(&quot;rsftrainMCAR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+rf.o.MCAR &lt;- rf.o
+load(paste(&quot;rsftrainMARwR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+rf.o.MARwR &lt;- rf.o
+load(paste(&quot;gbmtrainMAR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+gbm.o.MAR &lt;- gbm.o
+load(paste(&quot;gbmtrainMCAR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+gbm.o.MCAR &lt;- gbm.o
+load(paste(&quot;gbmtrainMARwR&quot;, seed.val, &quot;.RData&quot;, sep = &quot;&quot;))
+gbm.o.MARwR &lt;- gbm.o
+
+rm(rf.o, gbm.o)
+
+vimp.MAR &lt;- vimp(rf.o.MAR)
+vimp.MCAR &lt;- vimp(rf.o.MCAR)
+vimp.MARwR &lt;- vimp(rf.o.MARwR)
+
+impor.df &lt;- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
+           rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
+           rsf.MARwR = vimp.MARwR$importance[order(vimp.MARwR$importance, decreasing = TRUE)],
+           gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
+           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var,
+           gbm.MARwR = summary(gbm.o.MARwR, plotit = FALSE)$var)
+impor.df</code></pre>
+<pre><code>##                                       rsf.MAR               rsf.MCAR
+## LDH                                       ALP                    ALP
+## ALB                                        HB                     HB
+## TESTO                                     AST                    AST
+## MG                                        LDH                    PSA
+## NA.                                       PSA                    LDH
+## ALP                                       ALB                  LIVER
+## NON_TARGET                                NEU                    WBC
+## AST                                    ECOG_C                    NEU
+## TPRO                               ANALGESICS                 ECOG_C
+## HB                                      TESTO             ANALGESICS
+## TARGET                                  LIVER                    ALT
+## ANALGESICS                              CREAT                    BMI
+## PSA                                        MG                  CREAT
+## PRIOR_RADIOTHERAPY                        ALT                    ALB
+## ESTROGENS                                 WBC                    NA.
+## ECOG_C                                    NA.                   TPRO
+## ALT                                     MHGEN                  TESTO
+## LIVER                                     BMI                     MG
+## BMI                                        CA                  MHGEN
+## CREAT                                     PLT                     CA
+## WBC                                      TURP                    PLT
+## PHOS                                     PHOS                 MHVASC
+## BILATERAL_ORCHIDECTOMY                  TBILI           GONADOTROPIN
+## MHVASC                                 MHCARD                  LUNGS
+## TBILI                                 ADRENAL                ADRENAL
+## TURP                                    LUNGS                   TURP
+## NEU                              GONADOTROPIN                 TARGET
+## CA                                        CHF               REGION_C
+## MHSOCIAL                         ORCHIDECTOMY            LYMPH_NODES
+## MHMUSCLE                              PULMEMB                 MHCARD
+## BISPHOSPHONATE                         TARGET                     MI
+## MHRENAL                           LYMPH_NODES                 MHRESP
+## MHMETAB                               AGEGRP2 BILATERAL_ORCHIDECTOMY
+## CORTICOSTEROID                           TPRO                    CHF
+## MHGEN                                CEREBACC         ACE_INHIBITORS
+## GLUCOCORTICOID                             MI                PULMEMB
+## MHCARD                               REGION_C             NON_TARGET
+## LYMPH_NODES                    BISPHOSPHONATE                MHRENAL
+## MHSURG                                MHMETAB     PRIOR_RADIOTHERAPY
+## REGION_C                       ANTI_ANDROGENS         BISPHOSPHONATE
+## BONE                               NON_TARGET         ANTI_ANDROGENS
+## PLT                                    MHRESP        LYMPHADENECTOMY
+## ANTI_ANDROGENS                           COPD                GIBLEED
+## ACE_INHIBITORS                 GLUCOCORTICOID                 PLEURA
+## DIAB                                 GASTREFL                   COPD
+## GONADOTROPIN                             BONE           ORCHIDECTOMY
+## AGEGRP2                                MHNERV                   BONE
+## MHINFECT                              MHPSYCH                  OTHER
+## MHINJURY                                OTHER               MHINJURY
+## CHF                    BILATERAL_ORCHIDECTOMY               MHGASTRO
+## LUNGS                                  PLEURA                 MHSKIN
+## LYMPHADENECTOMY                      MHGASTRO                MHPSYCH
+## BETA_BLOCKING                          MHSURG                  MHEYE
+## MHPSYCH                                MHSKIN                   DIAB
+## ADRENAL                              MHINJURY    SPINAL_CORD_SURGERY
+## MHRESP                                   DIAB                 MHSURG
+## GASTREFL                              MHRENAL         GLUCOCORTICOID
+## MHSKIN                                  COLON                  COLON
+## CEREBACC                  SPINAL_CORD_SURGERY               GASTREFL
+## MHIMMUNE                             MHSOCIAL               MHHEPATO
+## PLEURA                                MHBLOOD                KIDNEYS
+## MI                                    KIDNEYS               PATHFRAC
+## MHEYE                                   MHEYE                  MHEAR
+## MHCONGEN                               RECTAL                  TBILI
+## PROSTATECTOMY                         GIBLEED               MHINFECT
+## PERITONEUM                           MHINFECT               MHMUSCLE
+## MHGASTRO                             PATHFRAC                    PUD
+## SPINAL_CORD_SURGERY                     MHEAR                 RECTAL
+## ANTI_ESTROGENS                         MHVASC               PROSTATE
+## KIDNEYS                        ACE_INHIBITORS               CEREBACC
+## PATHFRAC                                  DVT                 MHENDO
+## MHBLOOD                                   PUD                 MHNERV
+## PULMEMB                        HMG_COA_REDUCT             PERITONEUM
+## ORCHIDECTOMY                         MHIMMUNE         ANTI_ESTROGENS
+## COLON                                SPINCOMP                AGEGRP2
+## HMG_COA_REDUCT                     PERITONEUM                MHBLOOD
+## SPINCOMP                             MHMUSCLE          BETA_BLOCKING
+## MHEAR                                MHHEPATO               SPINCOMP
+## COPD                           ANTI_ESTROGENS         CORTICOSTEROID
+## MHENDO                               MHCONGEN                BLADDER
+## MHINVEST                             PROSTATE               MHINVEST
+## GIBLEED                               BLADDER            SOFT_TISSUE
+## DVT                             BETA_BLOCKING              IMIDAZOLE
+## BLADDER                    PRIOR_RADIOTHERAPY               MHCONGEN
+## IMIDAZOLE                      CORTICOSTEROID                    DVT
+## PROSTATE                             MHINVEST               MHIMMUNE
+## RECTAL                            SOFT_TISSUE          PROSTATECTOMY
+## PUD                                 ESTROGENS              ESTROGENS
+## MHNERV                                 MHENDO                MHMETAB
+## OTHER                         LYMPHADENECTOMY                   PHOS
+## SOFT_TISSUE                         IMIDAZOLE               MHSOCIAL
+## MHHEPATO                        PROSTATECTOMY         HMG_COA_REDUCT
+## RACE_C                                 RACE_C                 RACE_C
+##                            rsf.MARwR                gbm.MAR
+## LDH                     9.210198e-02                    ALP
+## ALB                     6.583778e-02                    LDH
+## TESTO                   2.126718e-02                    PSA
+## MG                      1.961449e-02                     HB
+## NA.                     1.536714e-02                    AST
+## ALP                     9.135452e-03                  CREAT
+## NON_TARGET              8.914404e-03                  TESTO
+## AST                     4.236349e-03                   PHOS
+## TPRO                    3.908726e-03                    PLT
+## HB                      3.661299e-03                    BMI
+## TARGET                  2.958580e-03                  TBILI
+## ANALGESICS              2.173887e-03                    NEU
+## PSA                     1.502297e-03                   TPRO
+## PRIOR_RADIOTHERAPY      1.398386e-03                    WBC
+## ESTROGENS               1.213351e-03                     CA
+## ECOG_C                  1.195185e-03               REGION_C
+## ALT                     1.048707e-03                    ALT
+## LIVER                   1.015614e-03                    ALB
+## BMI                     9.543613e-04                     MG
+## CREAT                   8.906479e-04                    NA.
+## WBC                     8.306869e-04           GONADOTROPIN
+## PHOS                    7.311742e-04         GLUCOCORTICOID
+## BILATERAL_ORCHIDECTOMY  7.311538e-04                 RACE_C
+## MHVASC                  7.203595e-04                 ECOG_C
+## TBILI                   6.496221e-04                AGEGRP2
+## TURP                    6.376363e-04                 MHRESP
+## NEU                     6.358361e-04                     MI
+## CA                      5.894550e-04                  LIVER
+## MHSOCIAL                5.643819e-04                   DIAB
+## MHMUSCLE                4.833900e-04     PRIOR_RADIOTHERAPY
+## BISPHOSPHONATE          4.448351e-04               PROSTATE
+## MHRENAL                 4.441939e-04                  MHGEN
+## MHMETAB                 4.393087e-04            LYMPH_NODES
+## CORTICOSTEROID          4.197990e-04               MHINVEST
+## MHGEN                   4.181029e-04                   TURP
+## GLUCOCORTICOID          3.695542e-04                MHRENAL
+## MHCARD                  3.603335e-04                 MHCARD
+## LYMPH_NODES             3.576531e-04         BISPHOSPHONATE
+## MHSURG                  3.549204e-04                  OTHER
+## REGION_C                3.399862e-04                 TARGET
+## BONE                    3.229263e-04             ANALGESICS
+## PLT                     2.855734e-04                MHMETAB
+## ANTI_ANDROGENS          2.790297e-04         ACE_INHIBITORS
+## ACE_INHIBITORS          2.433041e-04                GIBLEED
+## DIAB                    2.358747e-04          PROSTATECTOMY
+## GONADOTROPIN            2.218506e-04               MHGASTRO
+## AGEGRP2                 2.105517e-04               MHINFECT
+## MHINFECT                1.924262e-04          BETA_BLOCKING
+## MHINJURY                1.874235e-04              IMIDAZOLE
+## CHF                     1.854792e-04         CORTICOSTEROID
+## LUNGS                   1.763138e-04           ORCHIDECTOMY
+## LYMPHADENECTOMY         1.713164e-04         HMG_COA_REDUCT
+## BETA_BLOCKING           1.343270e-04                 MHSURG
+## MHPSYCH                 1.228872e-04         ANTI_ANDROGENS
+## ADRENAL                 1.029517e-04               GASTREFL
+## MHRESP                  6.616802e-05               MHSOCIAL
+## GASTREFL                4.349329e-05                 MHNERV
+## MHSKIN                  4.126399e-05              ESTROGENS
+## CEREBACC                3.875856e-05               CEREBACC
+## MHIMMUNE                3.630178e-05               MHINJURY
+## PLEURA                  3.245771e-05                MHPSYCH
+## MI                      3.117771e-05        LYMPHADENECTOMY
+## MHEYE                   2.038369e-05                  LUNGS
+## MHCONGEN                1.185089e-05             NON_TARGET
+## PROSTATECTOMY           1.093961e-05               MHCONGEN
+## PERITONEUM              9.426284e-06                 MHVASC
+## MHGASTRO                1.803645e-06               MHHEPATO
+## SPINAL_CORD_SURGERY    -1.840119e-07                   BONE
+## ANTI_ESTROGENS         -1.220875e-06                MHBLOOD
+## KIDNEYS                -1.621486e-06                    CHF
+## PATHFRAC               -1.936037e-06                 MHSKIN
+## MHBLOOD                -2.365930e-06                    DVT
+## PULMEMB                -2.532551e-06                   COPD
+## ORCHIDECTOMY           -3.584548e-06                 MHENDO
+## COLON                  -5.599626e-06                 RECTAL
+## HMG_COA_REDUCT         -6.222455e-06                KIDNEYS
+## SPINCOMP               -7.754340e-06                 PLEURA
+## MHEAR                  -7.904988e-06                ADRENAL
+## COPD                   -1.252262e-05                BLADDER
+## MHENDO                 -2.257649e-05             PERITONEUM
+## MHINVEST               -2.949872e-05                  COLON
+## GIBLEED                -3.720583e-05            SOFT_TISSUE
+## DVT                    -3.821046e-05    SPINAL_CORD_SURGERY
+## BLADDER                -4.013290e-05 BILATERAL_ORCHIDECTOMY
+## IMIDAZOLE              -4.296246e-05         ANTI_ESTROGENS
+## PROSTATE               -6.172446e-05                    PUD
+## RECTAL                 -6.490730e-05                PULMEMB
+## PUD                    -7.013786e-05               PATHFRAC
+## MHNERV                 -7.393441e-05               SPINCOMP
+## OTHER                  -8.346831e-05                  MHEAR
+## SOFT_TISSUE            -9.280824e-05                  MHEYE
+## MHHEPATO               -1.247879e-04               MHIMMUNE
+## RACE_C                 -1.523227e-04               MHMUSCLE
+##                                      gbm.MCAR              gbm.MARwR
+## LDH                                       ALP                    LDH
+## ALB                                       PSA                  TESTO
+## TESTO                                      HB                    ALB
+## MG                                       TPRO                     MG
+## NA.                                       LDH                    NA.
+## ALP                                       WBC                   TPRO
+## NON_TARGET                              TESTO                  TBILI
+## AST                                       AST             ANALGESICS
+## TPRO                                       MG                  CREAT
+## HB                                        PLT         ACE_INHIBITORS
+## TARGET                                  TBILI                    ALP
+## ANALGESICS                                NEU                    WBC
+## PSA                                       BMI                    AST
+## PRIOR_RADIOTHERAPY                      CREAT                     HB
+## ESTROGENS                                  CA                    PSA
+## ECOG_C                                    ALT           GONADOTROPIN
+## ALT                                      PHOS              ESTROGENS
+## LIVER                                     NA.                  LIVER
+## BMI                                       ALB                    ALT
+## CREAT                                REGION_C                    PLT
+## WBC                              GONADOTROPIN         BISPHOSPHONATE
+## PHOS                                   RACE_C                   PHOS
+## BILATERAL_ORCHIDECTOMY         GLUCOCORTICOID               REGION_C
+## MHVASC                                 MHRESP                     CA
+## TBILI                                 AGEGRP2                 ECOG_C
+## TURP                                 PROSTATE                    NEU
+## NEU                            BISPHOSPHONATE                    BMI
+## CA                                     ECOG_C                   DIAB
+## MHSOCIAL                           ANALGESICS             NON_TARGET
+## MHMUSCLE                                   MI               MHINVEST
+## BISPHOSPHONATE                           TURP                 MHCARD
+## MHRENAL                        ACE_INHIBITORS     PRIOR_RADIOTHERAPY
+## MHMETAB                           LYMPH_NODES                 MHRESP
+## CORTICOSTEROID             PRIOR_RADIOTHERAPY                  LUNGS
+## MHGEN                                  MHCARD         GLUCOCORTICOID
+## GLUCOCORTICOID                        MHMETAB                AGEGRP2
+## MHCARD                             NON_TARGET                   TURP
+## LYMPH_NODES                          MHINVEST            LYMPH_NODES
+## MHSURG                                MHRENAL                 MHSURG
+## REGION_C                             CEREBACC         HMG_COA_REDUCT
+## BONE                                   TARGET                 TARGET
+## PLT                                     LIVER                 MHVASC
+## ANTI_ANDROGENS                          OTHER                MHRENAL
+## ACE_INHIBITORS                         MHSURG                  MHGEN
+## DIAB                                    MHGEN               MHMUSCLE
+## GONADOTROPIN                        IMIDAZOLE               MHGASTRO
+## AGEGRP2                                MHVASC                MHPSYCH
+## MHINFECT                        PROSTATECTOMY               PROSTATE
+## MHINJURY                            ESTROGENS               MHINJURY
+## CHF                              ORCHIDECTOMY BILATERAL_ORCHIDECTOMY
+## LUNGS                          ANTI_ANDROGENS                   BONE
+## LYMPHADENECTOMY                         LUNGS          BETA_BLOCKING
+## BETA_BLOCKING                   BETA_BLOCKING               GASTREFL
+## MHPSYCH                BILATERAL_ORCHIDECTOMY               MHSOCIAL
+## ADRENAL                                  DIAB               MHINFECT
+## MHRESP                               MHMUSCLE                   COPD
+## GASTREFL                             MHCONGEN                     MI
+## MHSKIN                                  MHEYE               CEREBACC
+## CEREBACC                                MHEAR                  MHEYE
+## MHIMMUNE                             MHGASTRO                  MHEAR
+## PLEURA                               MHSOCIAL           ORCHIDECTOMY
+## MI                             HMG_COA_REDUCT                 RACE_C
+## MHEYE                                  MHSKIN                 RECTAL
+## MHCONGEN                                 BONE                KIDNEYS
+## PROSTATECTOMY                          MHNERV                 PLEURA
+## PERITONEUM                           MHINFECT                  OTHER
+## MHGASTRO                              GIBLEED                ADRENAL
+## SPINAL_CORD_SURGERY                  GASTREFL                BLADDER
+## ANTI_ESTROGENS                        MHBLOOD             PERITONEUM
+## KIDNEYS                       LYMPHADENECTOMY                  COLON
+## PATHFRAC                                 COPD            SOFT_TISSUE
+## MHBLOOD                                MHENDO          PROSTATECTOMY
+## PULMEMB                                   CHF        LYMPHADENECTOMY
+## ORCHIDECTOMY                              DVT    SPINAL_CORD_SURGERY
+## COLON                                  RECTAL         ANTI_ANDROGENS
+## HMG_COA_REDUCT                        KIDNEYS         CORTICOSTEROID
+## SPINCOMP                               PLEURA              IMIDAZOLE
+## MHEAR                                 ADRENAL         ANTI_ESTROGENS
+## COPD                                  BLADDER                    CHF
+## MHENDO                             PERITONEUM                    DVT
+## MHINVEST                                COLON                GIBLEED
+## GIBLEED                           SOFT_TISSUE                    PUD
+## DVT                       SPINAL_CORD_SURGERY                PULMEMB
+## BLADDER                        CORTICOSTEROID               PATHFRAC
+## IMIDAZOLE                      ANTI_ESTROGENS               SPINCOMP
+## PROSTATE                                  PUD                MHBLOOD
+## RECTAL                                PULMEMB               MHCONGEN
+## PUD                                  PATHFRAC                 MHENDO
+## MHNERV                               SPINCOMP               MHHEPATO
+## OTHER                                MHHEPATO               MHIMMUNE
+## SOFT_TISSUE                          MHIMMUNE                MHMETAB
+## MHHEPATO                             MHINJURY                 MHNERV
+## RACE_C                                MHPSYCH                 MHSKIN</code></pre>
 <pre class="r"><code>tmp &lt;- results[-grep(&quot;stabSelect&quot;, names(results))]
 for(i in seq_along(tmp)) {
   riskhat &lt;- cbind(validation[, &quot;RPT&quot;, drop = FALSE], data.frame(riskScoreGlobal = tmp[[i]]))
-  write.csv(riskhat, file = paste(&quot;Validation/&quot;, names(tmp)[[i]], &quot;.csv&quot;, sep = &quot;&quot;), row.names=FALSE)
+  write.csv(riskhat, file = paste(&quot;Validation2/&quot;, names(tmp)[[i]], &quot;.csv&quot;, sep = &quot;&quot;), row.names=FALSE)
 }</code></pre>
-<pre class="r"><code>postscript(file = &quot;Selection.eps&quot;, width = 5, height = 12,
+<pre class="r"><code>postscript(file = &quot;Selection2.eps&quot;, width = 5, height = 12,
            onefile = FALSE, horizontal = FALSE, paper = &quot;special&quot;)
 p1 &lt;- plot(results$stabSelectMCAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
@@ -1249,15 +1567,8 @@ p3 &lt;- plot(results$stabSelectMARwR) +
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = &quot;MARwR&quot;)) +
   geom_abline(intercept = 0.5, slope = 0, color = &quot;red&quot;)  
-print(gridExtra::grid.arrange(p1, p2, p3, ncol=1))</code></pre>
-<pre><code>## TableGrob (3 x 1) &quot;arrange&quot;: 3 grobs
-##   z     cells    name           grob
-## 1 1 (1-1,1-1) arrange gtable[layout]
-## 2 2 (2-2,1-1) arrange gtable[layout]
-## 3 3 (3-3,1-1) arrange gtable[layout]</code></pre>
-<pre class="r"><code>dev.off()</code></pre>
-<pre><code>## quartz_off_screen 
-##                 2</code></pre>
+gridExtra::grid.arrange(p1, p2, p3, ncol=1)
+dev.off()</code></pre>
 </div>
 
 

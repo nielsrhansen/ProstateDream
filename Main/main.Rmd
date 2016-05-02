@@ -170,7 +170,42 @@ xtable(
   digits = 0
 )
 
-table(rbind(CoreTable_training[, c("RACE_C", "REGION_C", "STUDYID")]))
+table(CoreTable_training[, c("RACE_C", "REGION_C", "STUDYID")])
+
+tmp <- table(rbind(CoreTable_training[, c("AGEGRP2", "STUDYID")], 
+                   CoreTable_validation[, c("AGEGRP2", "STUDYID")]))
+
+xtable(addmargins(tmp), digits = 0)
+
+tmp <- t(t(tmp) / colSums(tmp))
+
+ggplot(aes(x = factor(AGEGRP2, levels = c("18-64", "65-74", ">=75")), 
+      y = value, fill = STUDYID), data = melt(tmp)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  xlab("Age") + ylab("Relative frequency")
+
+tmp <- table(rbind(CoreTable_training[, c("RACE_C", "STUDYID")], 
+                         CoreTable_validation[, c("RACE_C", "STUDYID")]))
+
+
+tmp <- t(t(tmp) / colSums(tmp))
+
+ggplot(aes_string(x = "RACE_C", 
+      y = "value", fill = "STUDYID"), data = melt(tmp)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  xlab("Race") + ylab("Relative frequency")
+
+tmp <- table(rbind(CoreTable_training[, c("REGION_C", "STUDYID")], 
+                         CoreTable_validation[, c("REGION_C", "STUDYID")]))
+
+tmp <- t(t(tmp) / colSums(tmp))
+
+ggplot(aes_string(x = "REGION_C", 
+      y = "value", fill = "STUDYID"), data = melt(tmp)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  xlab("Region") + ylab("Relative frequency")
+
+
 
 trainTable <- CoreTableDict[CoreTableDict$Name %in% colnames(training), ][-(1:3),]
 trainTable <- trainTable[order(trainTable$Type), ]
@@ -347,8 +382,10 @@ trainModels <- function(train,
 
 ### CV loop
 
-```{r cvloop}
-seed <- 12
+```{r cvloop, eval=FALSE}
+## To obtain identical results as in the paper use the three seeds 
+## 12, 1213 and 121314.
+seed <- 121314
 set.seed(seed)
 k <- 5 ## number of CV folds
 samp <- sample(rep(1:k, each = ceiling(nrow(training)/k)), 
@@ -381,7 +418,7 @@ for (i in 1:k) {
 }
 ```
 
-```{r scoring}
+```{r scoring, eval=FALSE}
 res_list <- list()
 
 for (i in 1:k) {
@@ -404,20 +441,20 @@ for (i in 1:k) {
 
 ### Results
 
-```{r results}
+```{r results, eval=FALSE}
 ## Storing results using seed in name
 save(res_list, file = paste("mainResults", seed, sep = ""))
 ```
 
 ### Full models for validation submission
 
-```{r validation}
+```{r validation, eval =TRUE}
 impute <- setdiff(
     names(training)[apply(is.na(training), 2, any)],
     nonPreds)
 cF <- subset(classFrame, names %in% impute)
 
-seed.val <- 102030 
+seed.val <- 3020 
 set.seed(seed.val)
 results <- trainModels(
   train = training, 
@@ -432,18 +469,18 @@ results <- trainModels(
 )
 ```
 
-```{r vimp}
-load("rsftrainMAR.RData")
+```{r vimp, eval = TRUE}
+load(paste("rsftrainMAR", seed.val, ".RData", sep = ""))
 rf.o.MAR <- rf.o
-load("rsftrainMCAR.RData")
+load(paste("rsftrainMCAR", seed.val, ".RData", sep = ""))
 rf.o.MCAR <- rf.o
-load("rsftrainMARwR.RData")
+load(paste("rsftrainMARwR", seed.val, ".RData", sep = ""))
 rf.o.MARwR <- rf.o
-load("gbmtrainMAR.RData")
+load(paste("gbmtrainMAR", seed.val, ".RData", sep = ""))
 gbm.o.MAR <- gbm.o
-load("gbmtrainMCAR.RData")
+load(paste("gbmtrainMCAR", seed.val, ".RData", sep = ""))
 gbm.o.MCAR <- gbm.o
-load("gbmtrainMARwR.RData")
+load(paste("gbmtrainMARwR", seed.val, ".RData", sep = ""))
 gbm.o.MARwR <- gbm.o
 
 rm(rf.o, gbm.o)
@@ -463,16 +500,16 @@ impor.df
 
 
 
-```{r}
+```{r, eval = TRUE}
 tmp <- results[-grep("stabSelect", names(results))]
 for(i in seq_along(tmp)) {
   riskhat <- cbind(validation[, "RPT", drop = FALSE], data.frame(riskScoreGlobal = tmp[[i]]))
-  write.csv(riskhat, file = paste("Validation/", names(tmp)[[i]], ".csv", sep = ""), row.names=FALSE)
+  write.csv(riskhat, file = paste("Validation2/", names(tmp)[[i]], ".csv", sep = ""), row.names=FALSE)
 }
 ```
 
-```{r selection}
-postscript(file = "Selection.eps", width = 5, height = 12,
+```{r selection, eval = FALSE}
+postscript(file = "Selection2.eps", width = 5, height = 12,
            onefile = FALSE, horizontal = FALSE, paper = "special")
 p1 <- plot(results$stabSelectMCAR) + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
@@ -486,7 +523,7 @@ p3 <- plot(results$stabSelectMARwR) +
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   geom_label(aes(x = 15, y = 0.8, label = "MARwR")) +
   geom_abline(intercept = 0.5, slope = 0, color = "red")  
-print(gridExtra::grid.arrange(p1, p2, p3, ncol=1))
+gridExtra::grid.arrange(p1, p2, p3, ncol=1)
 dev.off()
 ```
 

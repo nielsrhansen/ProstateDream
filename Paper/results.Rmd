@@ -10,7 +10,12 @@ output: html_document
 library(xtable)
 library(ggplot2)
 library(reshape2)
-load("../Main/mainResults1020")
+load("../Main/mainResults12")
+res_list1 <- res_list
+load("../Main/mainResults1213")
+res_list1 <- c(res_list, res_list1)
+load("../Main/mainResults121314")
+res_list <- c(res_list, res_list1)
 ```
 
 ### CV folds, ordered by iAUC
@@ -124,14 +129,41 @@ ggplot(dd, aes(x = variable, y = value, fill = Method)) +
   theme(legend.position = "bottom")
 ```
 
+Reading the results from the validation via the web interface.
+
+```{r}
+tmp <- scan(file = "ValidationResults.txt", what = "character")
+methNames <- rownames(ave_df)
+valRes <- vector("list", length(methNames))
+names(valRes) <- methNames
+temp <- tmp[-which(tmp %in% methNames)]
+temp <- data.frame(methName = rep(methNames, each = 5),  
+                   score = sub(":", "_val", temp[seq(1, 270, 2)]), 
+                   value = as.numeric(temp[seq(2, 270, 2)]))
+temp <- dcast(temp, methName ~ score)
+rownames(temp) <- temp$methName
+ave_df2 <- cbind(ave_df, temp[rownames(ave_df), -1])
+tmp <- scan(file = "ValidationResults2.txt", what = "character")
+methNames <- rownames(ave_df)
+valRes <- vector("list", length(methNames))
+names(valRes) <- methNames
+temp <- tmp[-which(tmp %in% methNames)]
+temp <- data.frame(methName = rep(methNames, each = 5),  
+                   score = sub(":", "_val2", temp[seq(1, 270, 2)]), 
+                   value = as.numeric(temp[seq(2, 270, 2)]))
+temp <- dcast(temp, methName ~ score)
+rownames(temp) <- temp$methName
+ave_df2 <- cbind(ave_df2, temp[rownames(ave_df), -1])
+```
+
 
 ### iAUC plot
 
 ```{r iAUCplot}
-## levOrd <- names(sort(tapply(ave_df$iAUC, ave_df$Method, mean), decreasing = TRUE))
-tmp <- ave_df[ave_df$Imputa == "MCAR", ]
-tmp <- subset(tmp, Method != "gb")
-ord <- order(tmp[, "iAUC"], decreasing = TRUE)
+tmp <- subset(ave_df2, Imputa == "MCAR" & Method != "gb")
+tmp2 <- subset(ave_df2, Imputa == "MAR" & Method != "gb")
+ord <- order(tmp[, "iAUC"] + (tmp[, "iAUC_val"] + tmp[, "iAUC_val2"])/2 + 
+               tmp2[, "iAUC"] + (tmp2[, "iAUC_val"] + tmp2[, "iAUC_val2"])/2, decreasing = TRUE)
 niceLabels <- c("Cox*", "Forest", "Forest*", "Gam*", "Boosting", 
                 "Boosting*", "Debiased lasso", "Lasso")[ord]
 levOrd <- tmp[ord, "Method"]
@@ -140,22 +172,28 @@ dd2 <- dd
 dd2 <- subset(dd2, Method != "gb")
 dd2$Method <- factor(dd2$Method, levels = levOrd)
 dd2$Imputa <- factor(dd2$Imputa, levels = c("MCAR", "MAR", "MARwR"))         
-ave2 <- ave_df[, c(1, 2, 7)]
+ave2 <- ave_df2[, c(1, 2, 7, 12, 17)]
 ave2 <- subset(ave2, Method != "gb")
 
-postscript(file = "iAUC.eps", width = 10, height = 4,
+postscript(file = "iAUC.eps", width = 10, height = 5,
            onefile = FALSE, horizontal = FALSE, paper = "special")
-ggplot(dd2, aes(x = Method, y = value)) + 
+print(ggplot(dd2, aes(x = Method, y = value)) + 
   geom_point(color = "lightblue", size = 2) + 
   geom_point(aes(y = iAUC), data = ave2,
-            color = "red", size = 3) + 
+            color = "red", size = 3) +
+    geom_point(aes(y = (iAUC_val + iAUC_val2)/2 ), data = ave2,
+            color = "purple", shape = 15, size = 3) +
+    #geom_point(aes(y = iAUC_val2), data = ave2,
+    #        color = "green", shape = 15, size = 3) +
+    geom_abline(intercept = 0.7432, slope = 0, 
+                color = "purple", linetype = 2) +
   facet_grid( ~ Imputa) + 
-  coord_cartesian(ylim=c(.6, 0.75)) +
+  coord_cartesian(ylim=c(.6, 0.8)) +
   ylab("Integrated AUC") + xlab("Method") +
   theme(legend.position = "top") + 
   theme(axis.title.y = element_text(margin = margin(0, 10, 0, 0))) +
   theme(axis.text.x  = element_text(angle = 45, vjust = 1, hjust = 1)) + 
-  scale_x_discrete(labels = niceLabels)
+  scale_x_discrete(labels = niceLabels))
 dev.off()
 ```
 
