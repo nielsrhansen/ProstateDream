@@ -54,5 +54,5 @@ the web interface for the competition. Thus they cannot be programmatically repr
 
 ### Misc.
 
-The directory `Write-up` contains the [original write-up](https://www.synapse.org/#!Synapse:syn4260742/wiki/234778) submitted for the competition
+The directory `Write-up` contains the [original write-up](https://www.synapse.org/#!Synapse:syn4260742/wiki/234778) submitted for the competition.
 
