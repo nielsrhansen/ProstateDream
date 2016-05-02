@@ -1,0 +1,109 @@
+coxMAR
+
+cIndex: 0.6985 auc12: 0.7310 auc18: 0.7368 auc24: 0.8177 iAUC: 0.7609
+
+coxMARwR
+
+cIndex: 0.6863 auc12: 0.7138 auc18: 0.7193 auc24: 0.7939 iAUC: 0.7403
+
+coxMCAR
+
+cIndex: 0.6814 auc12: 0.7077 auc18: 0.7087 auc24: 0.7967 iAUC: 0.7329
+
+forestMAR
+
+cIndex: 0.7289 auc12: 0.7757 auc18: 0.7757 auc24: 0.8319 iAUC: 0.7857
+
+forestMARwR
+
+cIndex: 0.6835 auc12: 0.7116 auc18: 0.7316 auc24: 0.8027 iAUC: 0.7400
+
+forestMCAR
+
+cIndex: 0.7232 auc12: 0.7623 auc18: 0.7692 auc24: 0.8370 iAUC: 0.7825
+
+forestStabMAR
+
+cIndex: 0.6822 auc12: 0.7146 auc18: 0.7375 auc24: 0.7769 iAUC: 0.7420
+
+forestStabMARwR
+
+cIndex: 0.6550 auc12: 0.6655 auc18: 0.7092 auc24: 0.7761 iAUC: 0.7206
+
+forestStabMCAR
+
+cIndex: 0.6805 auc12: 0.7121 auc18: 0.7308 auc24: 0.7913 iAUC: 0.7452
+
+gamMAR
+
+cIndex: 0.7069 auc12: 0.7377 auc18: 0.7467 auc24: 0.8303 iAUC: 0.7686
+
+gamMARwR
+
+cIndex: 0.6679 auc12: 0.6739 auc18: 0.7032 auc24: 0.8159 iAUC: 0.7249
+
+gamMCAR
+
+cIndex: 0.6948 auc12: 0.7242 auc18: 0.7247 auc24: 0.8153 iAUC: 0.7498
+
+gbFullMAR
+
+cIndex: 0.7056 auc12: 0.7566 auc18: 0.7432 auc24: 0.7848 iAUC: 0.7559
+
+gbFullMARwR
+
+cIndex: 0.5705 auc12: 0.5792 auc18: 0.5991 auc24: 0.6520 iAUC: 0.5860
+
+gbFullMCAR
+
+cIndex: 0.6847 auc12: 0.7173 auc18: 0.7296 auc24: 0.7854 iAUC: 0.7397
+
+gbMAR
+
+cIndex: 0.6930 auc12: 0.7244 auc18: 0.7418 auc24: 0.7975 iAUC: 0.7519
+
+gbMARwR
+
+cIndex: 0.6604 auc12: 0.6666 auc18: 0.7102 auc24: 0.7915 iAUC: 0.7241
+
+gbMCAR
+
+cIndex: 0.6901 auc12: 0.7249 auc18: 0.7397 auc24: 0.7896 iAUC: 0.7484
+
+gbStabMAR
+
+cIndex: 0.6812 auc12: 0.7135 auc18: 0.7318 auc24: 0.7936 iAUC: 0.7433
+
+gbStabMARwR
+
+cIndex: 0.6338 auc12: 0.6260 auc18: 0.6871 auc24: 0.7750 iAUC: 0.6901
+
+gbStabMCAR
+
+cIndex: 0.6722 auc12: 0.6936 auc18: 0.7268 auc24: 0.7940 iAUC: 0.7295
+
+lassoDebiasMAR
+
+cIndex: 0.6847 auc12: 0.7181 auc18: 0.7261 auc24: 0.7943 iAUC: 0.7278
+
+lassoDebiasMARwR
+
+cIndex: 0.6893 auc12: 0.7207 auc18: 0.7316 auc24: 0.8034 iAUC: 0.7365
+ 
+lassoDebiasMCAR
+
+cIndex: 0.6858 auc12: 0.7240 auc18: 0.7243 auc24: 0.7957 iAUC: 0.7283
+
+lassoMAR
+
+cIndex: 0.7068 auc12: 0.7491 auc18: 0.7444 auc24: 0.8227 iAUC: 0.7635 
+
+lassoMARwR
+
+cIndex: 0.7085 auc12: 0.7489 auc18: 0.7449 auc24: 0.8271 iAUC: 0.7661
+
+lassoMCAR
+
+cIndex: 0.7054 auc12: 0.7460 auc18: 0.7430 auc24: 0.8220 iAUC: 0.7594
+
+

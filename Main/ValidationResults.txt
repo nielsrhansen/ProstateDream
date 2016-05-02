@@ -1,0 +1,215 @@
+coxMAR
+
+cIndex: 0.6754
+auc12: 0.6993
+auc18: 0.7080
+auc24: 0.7923
+iAUC: 0.7279
+
+coxMARwR
+
+cIndex: 0.6870
+auc12: 0.7155
+auc18: 0.7199
+auc24: 0.7947
+iAUC: 0.7415
+
+coxMCAR
+
+cIndex: 0.6798
+auc12: 0.7063
+auc18: 0.7075
+auc24: 0.7921
+iAUC: 0.7311
+
+forestMAR
+
+cIndex: 0.7327
+auc12: 0.7832
+auc18: 0.7770
+auc24: 0.8284
+iAUC: 0.7888
+
+forestMARwR
+
+cIndex: 0.6810
+auc12: 0.7056
+auc18: 0.7296
+auc24: 0.7973
+iAUC: 0.7355
+
+forestMCAR
+
+cIndex: 0.7265
+auc12: 0.7704
+auc18: 0.7682
+auc24: 0.8282
+iAUC: 0.7825
+
+forestStabMAR
+
+cIndex: 0.6810
+auc12: 0.7139
+auc18: 0.7316
+auc24: 0.7704
+iAUC: 0.7356
+
+forestStabMARwR
+
+cIndex: 0.6548
+auc12: 0.6665
+auc18: 0.7086
+auc24: 0.7731
+iAUC: 0.7201
+
+forestStabMCAR
+
+cIndex: 0.6783
+auc12: 0.7172
+auc18: 0.7248
+auc24: 0.7699
+iAUC: 0.7349
+
+gamMAR
+
+cIndex: 0.6919
+auc12: 0.7172
+auc18: 0.7244
+auc24: 0.8161
+iAUC: 0.7473
+
+gamMARwR
+
+cIndex: 0.6712
+auc12: 0.6784
+auc18: 0.7062
+auc24: 0.8191
+iAUC: 0.7291
+
+gamMCAR
+
+cIndex: 0.6962
+auc12: 0.7264
+auc18: 0.7253
+auc24: 0.8160
+iAUC: 0.7514
+
+gbFullMAR
+
+cIndex: 0.7086
+auc12: 0.7603
+auc18: 0.7465
+auc24: 0.7747
+iAUC: 0.7564
+
+gbFullMARwR
+
+cIndex: 0.5700
+auc12: 0.5774
+auc18: 0.6012
+auc24: 0.6478
+iAUC: 0.5852
+
+gbFullMCAR
+
+cIndex: 0.7040
+auc12: 0.7569
+auc18: 0.7373
+auc24: 0.7771
+iAUC: 0.7575
+
+gbMAR
+
+cIndex: 0.6964
+auc12: 0.7304
+auc18: 0.7500
+auc24: 0.8005
+iAUC: 0.7565
+
+gbMARwR
+
+cIndex: 0.6612
+auc12: 0.6682
+auc18: 0.7090
+auc24: 0.7930
+iAUC: 0.7281
+
+gbMCAR
+
+cIndex: 0.7056
+auc12: 0.7593
+auc18: 0.7399
+auc24: 0.7755
+iAUC: 0.7539
+
+gbStabMAR
+
+cIndex: 0.6781
+auc12: 0.7026
+auc18: 0.7382
+auc24: 0.7997
+iAUC: 0.7393
+
+gbStabMARwR
+
+cIndex: 0.6365
+auc12: 0.6314
+auc18: 0.6887
+auc24: 0.7818
+iAUC: 0.6952
+
+gbStabMCAR
+
+cIndex: 0.6777
+auc12: 0.7050
+auc18: 0.7327
+auc24: 0.7808
+iAUC: 0.7303
+
+lassoDebiasMAR
+
+cIndex: 0.6809
+auc12: 0.7124
+auc18: 0.7196
+auc24: 0.7938
+iAUC: 0.7252
+
+lassoDebiasMARwR
+
+cIndex: 0.6891
+auc12: 0.7191
+auc18: 0.7301
+auc24: 0.8032
+iAUC: 0.7381
+
+lassoDebiasMCAR
+
+cIndex: 0.6850
+auc12: 0.7191
+auc18: 0.7247
+auc24: 0.7979
+iAUC: 0.7296
+
+lassoMAR
+
+cIndex: 0.7051
+auc12: 0.7462
+auc18: 0.7424
+auc24: 0.8189
+iAUC: 0.7603
+
+lassoMARwR
+
+cIndex: 0.7118
+auc12: 0.7543
+auc18: 0.7466
+auc24: 0.8321
+iAUC: 0.7728
+
+lassoMCAR
+
+cIndex: 0.7060
+auc12: 0.7490
+auc18: 0.7418
+auc24: 0.8167
+iAUC: 0.7586
