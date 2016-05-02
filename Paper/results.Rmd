@@ -132,7 +132,7 @@ ggplot(dd, aes(x = variable, y = value, fill = Method)) +
 Reading the results from the validation via the web interface.
 
 ```{r}
-tmp <- scan(file = "ValidationResults.txt", what = "character")
+tmp <- scan(file = "../Main/ValidationResults.txt", what = "character")
 methNames <- rownames(ave_df)
 valRes <- vector("list", length(methNames))
 names(valRes) <- methNames
@@ -143,7 +143,7 @@ temp <- data.frame(methName = rep(methNames, each = 5),
 temp <- dcast(temp, methName ~ score)
 rownames(temp) <- temp$methName
 ave_df2 <- cbind(ave_df, temp[rownames(ave_df), -1])
-tmp <- scan(file = "ValidationResults2.txt", what = "character")
+tmp <- scan(file = "../Main/ValidationResults2.txt", what = "character")
 methNames <- rownames(ave_df)
 valRes <- vector("list", length(methNames))
 names(valRes) <- methNames
