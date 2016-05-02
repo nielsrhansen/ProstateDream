@@ -44,12 +44,12 @@ summaries and construct descriptive figures. It then runs the 5-fold cross-valid
 refits all models to the entire data set and makes predictions on the validation data. It finally constructs plots 
 of the selection probabilities for stability selection.
 
-There are instructions in `main.Rmd` for setting seeds to obtain the exact same results as in the paper. These results
-are included in the files `mainResults12`, `mainResults1213` and `mainResults121314`. 
+There are instructions in `main.Rmd` for setting seeds to obtain the exact same results as in the paper. The results from
+the cross-validation are included in the files `mainResults12`, `mainResults1213` and `mainResults121314`. 
 
 The Rmd file `results.Rmd` in the Paper directory reads the cross-validation and validation results and constructs 
-various figures including those in the paper. Note that the validation results are stored in the files ValidationResults.txt and 
-ValidationResults2.txt, and that these validation results were obtained by submission of predictions via 
+various figures including those in the paper. Note that the validation results are stored in the files `ValidationResults.txt` and 
+`ValidationResults2.txt`, and that these validation results were obtained by submission of predictions via 
 the web interface for the competition. Thus they cannot be programmatically reproduced. 
 
 
