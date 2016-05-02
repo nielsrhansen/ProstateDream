@@ -8,19 +8,19 @@ Run the following R code to install required packages.
 
 ```
 install.packages(
-  "survival",
-  "xtable",
-  "ggplot2",
-  "reshape2",
-  "mice",
-  "mgcv",
-  "timeROC",
-  "Bolstad2",
-  "ROCR",
-  "randomForestSRC",
-  "lattice",
-  "RColorBrewer",
-  "glmnet"
+  c("survival",
+    "xtable",
+    "ggplot2",
+    "reshape2",
+    "mice",
+    "mgcv",
+    "timeROC",
+    "Bolstad2",
+    "ROCR",
+    "randomForestSRC",
+    "lattice",
+    "RColorBrewer",
+    "glmnet")
 )
 ```
 
