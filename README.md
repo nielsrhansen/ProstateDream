@@ -52,5 +52,7 @@ various figures including those in the paper. Note that the validation results a
 `ValidationResults2.txt`, and that these validation results were obtained by submission of predictions via 
 the web interface for the competition. Thus they cannot be programmatically reproduced. 
 
+### Misc.
 
+The directory `Write-up` contains the [original write-up](https://www.synapse.org/#!Synapse:syn4260742/wiki/234778) submitted for the competition
 
