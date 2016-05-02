@@ -7,8 +7,8 @@ output: html_document
 
 ```{r Preamble, echo=FALSE, cache=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
-setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
-#setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
+#setwd("~/Dropbox/Science/projects/ProstateDream/Main/")
+setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
 source("../Boosting/gbm.R")
 source("../SurvivalForests/survForests.R")
 source("../Imputation/imputation.R")
@@ -468,37 +468,6 @@ results <- trainModels(
   file.seed = seed.val
 )
 ```
-
-```{r vimp, eval = TRUE}
-load(paste("rsftrainMAR", seed.val, ".RData", sep = ""))
-rf.o.MAR <- rf.o
-load(paste("rsftrainMCAR", seed.val, ".RData", sep = ""))
-rf.o.MCAR <- rf.o
-load(paste("rsftrainMARwR", seed.val, ".RData", sep = ""))
-rf.o.MARwR <- rf.o
-load(paste("gbmtrainMAR", seed.val, ".RData", sep = ""))
-gbm.o.MAR <- gbm.o
-load(paste("gbmtrainMCAR", seed.val, ".RData", sep = ""))
-gbm.o.MCAR <- gbm.o
-load(paste("gbmtrainMARwR", seed.val, ".RData", sep = ""))
-gbm.o.MARwR <- gbm.o
-
-rm(rf.o, gbm.o)
-
-vimp.MAR <- vimp(rf.o.MAR)
-vimp.MCAR <- vimp(rf.o.MCAR)
-vimp.MARwR <- vimp(rf.o.MARwR)
-
-impor.df <- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
-           rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
-           rsf.MARwR = vimp.MARwR$importance[order(vimp.MARwR$importance, decreasing = TRUE)],
-           gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
-           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var,
-           gbm.MARwR = summary(gbm.o.MARwR, plotit = FALSE)$var)
-impor.df
-```
-
-
 
 ```{r, eval = TRUE}
 tmp <- results[-grep("stabSelect", names(results))]

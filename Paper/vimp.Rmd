@@ -1,0 +1,41 @@
+---
+title: "vimp"
+author: "Søren Wengel Mogensen"
+date: "4 March 2016"
+output: html_document
+---
+
+```{r vimp}
+library(randomForestSRC)
+library(gbm)
+
+setwd("c:/users/swmo/desktop/-/UCPH/DREAM/prostateDREAM/Main")
+seed.val <- 6681
+
+load(paste("rsftrainMAR", seed.val, ".RData", sep = ""))
+rf.o.MAR <- rf.o
+load(paste("rsftrainMCAR", seed.val, ".RData", sep = ""))
+rf.o.MCAR <- rf.o
+load(paste("rsftrainMARwR", seed.val, ".RData", sep = ""))
+rf.o.MARwR <- rf.o
+load(paste("gbmtrainMAR", seed.val, ".RData", sep = ""))
+gbm.o.MAR <- gbm.o
+load(paste("gbmtrainMCAR", seed.val, ".RData", sep = ""))
+gbm.o.MCAR <- gbm.o
+load(paste("gbmtrainMARwR", seed.val, ".RData", sep = ""))
+gbm.o.MARwR <- gbm.o
+
+rm(rf.o, gbm.o)
+
+vimp.MAR <- vimp(rf.o.MAR)
+vimp.MCAR <- vimp(rf.o.MCAR)
+vimp.MARwR <- vimp(rf.o.MARwR)
+
+impor.df <- data.frame(rsf.MAR = names(vimp.MAR$importance[order(vimp.MAR$importance, decreasing = TRUE)]),
+           rsf.MCAR = names(vimp.MCAR$importance[order(vimp.MCAR$importance, decreasing = TRUE)]),
+           rsf.MARwR = names(vimp.MARwR$importance[order(vimp.MARwR$importance, decreasing = TRUE)]),
+           gbm.MAR = summary(gbm.o.MAR, plotit = FALSE)$var,
+           gbm.MCAR = summary(gbm.o.MCAR, plotit = FALSE)$var,
+           gbm.MARwR = summary(gbm.o.MARwR, plotit = FALSE)$var)
+impor.df
+```
