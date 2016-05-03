@@ -2,10 +2,8 @@ main.html
 *.eps
 variables.txt
 variables2.txt
-Validation
 main_cache
 mainResults1020
-Validation2
 main_files
 mainAnn.Rmd
 mainResults

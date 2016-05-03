@@ -5,7 +5,7 @@ date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
 ---
 
-```{r Preamble, echo=FALSE, cache=FALSE}
+```{r Preamble, echo=FALSE, cache=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, cache = TRUE, message = FALSE)
 source("../Boosting/gbm.R")
 source("../SurvivalForests/survForests.R")
@@ -380,7 +380,7 @@ trainModels <- function(train,
 
 ### CV loop
 
-```{r cvloop, eval=TRUE}
+```{r cvloop, eval=TRUE, warning=FALSE}
 ## To obtain identical results as in the paper use the three seeds 
 ## 12, 1213 and 121314.
 seed <- 121314
@@ -446,11 +446,15 @@ save(res_list, file = paste("mainResults", seed, sep = ""))
 
 ### Full models for validation submission
 
-```{r validation, eval =TRUE}
+```{r validation, eval=TRUE, warning=FALSE}
 impute <- setdiff(
     names(training)[apply(is.na(training), 2, any)],
     nonPreds)
 cF <- subset(classFrame, names %in% impute)
+
+## As above, to obtain identical results as in the paper 
+## for the validation predictions the two seeds 
+### 102030 and 3020 were used.
 
 seed.val <- 3020 
 set.seed(seed.val)

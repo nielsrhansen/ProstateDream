@@ -157,7 +157,7 @@ ave_df2 <- cbind(ave_df2, temp[rownames(ave_df), -1])
 ```
 
 
-### iAUC plot
+### iAUC plot in paper
 
 ```{r iAUCplot}
 tmp <- subset(ave_df2, Imputa == "MCAR" & Method != "gb")
@@ -183,8 +183,6 @@ print(ggplot(dd2, aes(x = Method, y = value)) +
             color = "red", size = 3) +
     geom_point(aes(y = (iAUC_val + iAUC_val2)/2 ), data = ave2,
             color = "purple", shape = 15, size = 3) +
-    #geom_point(aes(y = iAUC_val2), data = ave2,
-    #        color = "green", shape = 15, size = 3) +
     geom_abline(intercept = 0.7432, slope = 0, 
                 color = "purple", linetype = 2) +
   facet_grid( ~ Imputa) + 
