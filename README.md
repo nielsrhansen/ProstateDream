@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/21821/nielsrhansen/ProstateDream.svg)](https://zenodo.org/badge/latestdoi/21821/nielsrhansen/ProstateDream)
+
 # R code for *Survival prognosis and variable selection: A case study for metastatic castrate resistant prostate cancer patients*
 
 A paper written in relation to [The Prostate Cancer DREAM Challenge](https://www.synapse.org/ ProstateCancerChallenge).
